@@ -58,6 +58,18 @@ button, input, select, textarea { font: inherit; color: inherit; }
   margin: 8px 6px 4px;
 }
 .btn.full { width: 100%; }
+.btn.new-chat,
+.btn.primary.new-chat {
+  background: #002868;
+  border-color: #002868;
+  color: #fff;
+  font-weight: 600;
+}
+.btn.new-chat:hover,
+.btn.primary.new-chat:hover {
+  background: #001f4d;
+  border-color: #001f4d;
+}
 .thread-list { display: flex; flex-direction: column; gap: 4px; flex: 1; min-height: 0; }
 .thread-item {
   display: flex; align-items: center; gap: 6px;
@@ -76,7 +88,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .thread-item .title {
   flex: 1; min-width: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  font-size: 0.86rem;
+  font-size: 0.82rem;
+  line-height: 1.3;
+  font-weight: 500;
 }
 .thread-actions { position: relative; flex-shrink: 0; }
 .menu-btn {
