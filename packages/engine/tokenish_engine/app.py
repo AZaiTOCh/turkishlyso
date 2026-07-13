@@ -63,7 +63,7 @@ async def root_ui():
 @app.post("/mumblz")
 @app.post("/title")
 async def mumblz_thread(payload: MumblzPayload) -> dict[str, Any]:
-    """Mumblz agent: whole-dialog → three-word title → vowel-stripped History label."""
+    """Mumblz agent: whole-dialog → two most suitable Title Case words for History."""
     apply_saved_keys_to_environ()
     local = mumblz_name_thread(payload.messages)
     title = local
