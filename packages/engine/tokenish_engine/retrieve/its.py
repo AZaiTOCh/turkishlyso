@@ -1,53 +1,131 @@
 """
-Open ITS-style retrieval skill scoring (Moorcheh-inspired, not proprietary MIB).
+Moorcheh-inspired Information-Theoretic Scoring (open reimplementation).
 
-Uses binary hashing of text chunks + contingency-table skill score to drop
-low-relevance chunks before they enter #D.
+Sources decoded into this module:
+  - Architecture PDF: MIB → contingency (a,b,c,d) → ITS / RSS skill score,
+    CPR honesty gate, Drift-Terminator pruning, Kiosk Mode.
+  - Public org https://github.com/moorcheh-ai (SDK exposes search + kiosk_mode;
+    proprietary MIB engine is NOT copied — only published API shapes +
+    meteorological skill-score math described in the brief).
+
+This is an open approximation for local gating before LLM context assembly.
+Optional cloud search: see moorcheh_client.py (uses moorcheh-sdk if installed).
 """
 
 from __future__ import annotations
 
 import hashlib
+import math
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from tokenish_engine.config import settings
 
 
-def _tokenize(text: str) -> set[str]:
-    return {t for t in re.findall(r"[a-z0-9]{3,}", (text or "").lower())}
+def _tokenize(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9]{3,}", (text or "").lower())
 
 
-def _bit_vector(text: str, bits: int = 256) -> int:
-    """Hash bag-of-tokens into a compact bitset."""
+def mib_binarize(text: str, bits: int = 512) -> int:
+    """
+    Open MIB-style binarization: map tokens → bit positions via hashing.
+
+    Not Moorcheh's proprietary transform — a local stand-in that preserves the
+    bitwise contingency workflow from the decode brief.
+    """
     vec = 0
     for tok in _tokenize(text):
-        h = int(hashlib.sha1(tok.encode("utf-8")).hexdigest(), 16)
-        vec |= 1 << (h % bits)
+        h = int(hashlib.sha256(tok.encode("utf-8")).hexdigest(), 16)
+        # Multi-hash for denser codes (Maximally Informative-ish coverage)
+        for salt in (0, 1, 2):
+            idx = (h + salt * 0x9E3779B97F4A7C15) % bits
+            vec |= 1 << idx
     return vec
 
 
-def contingency(a: int, b: int, bits: int = 256) -> tuple[int, int, int, int]:
-    """Return (hits, false_alarms, misses, correct_negatives)."""
-    hits = (a & b).bit_count()
-    false_alarms = (a & ~b).bit_count()
-    misses = (~a & b).bit_count()
-    correct_neg = bits - hits - false_alarms - misses
-    return hits, false_alarms, misses, correct_neg
+def contingency_table(query_bits: int, doc_bits: int, bits: int = 512) -> dict[str, int]:
+    """
+    Contingency table for binary codes:
+      a = hits            (q=1, d=1)
+      b = false alarms    (q=1, d=0)
+      c = misses          (q=0, d=1)
+      d = correct neg.    (q=0, d=0)
+    """
+    a = (query_bits & doc_bits).bit_count()
+    b = (query_bits & ~doc_bits).bit_count()
+    c = (~query_bits & doc_bits).bit_count()
+    # mask to bit-width
+    mask = (1 << bits) - 1 if bits < 62 else None
+    if mask is not None:
+        # for safety with python ints, recompute d from identity
+        d = bits - a - b - c
+    else:
+        d = bits - a - b - c
+    return {"a": a, "b": b, "c": c, "d": max(0, d)}
 
 
-def its_skill_score(query: str, chunk: str, bits: int = 256) -> float:
+def peirce_skill_score(a: int, b: int, c: int, d: int) -> float:
+    """PSS / True Skill Statistic — can be negative (honest noise signal)."""
+    den = (a + c) * (b + d)
+    if den == 0:
+        return 0.0
+    return (a * d - b * c) / float(den)
+
+
+def heidke_skill_score(a: int, b: int, c: int, d: int) -> float:
+    """Heidke Skill Score (HSS) used as ITS / RSS gatekeeper in the brief."""
+    n = a + b + c + d
+    if n == 0:
+        return 0.0
+    expected = ((a + c) * (a + b) + (b + d) * (c + d)) / float(n)
+    den = n - expected
+    if abs(den) < 1e-12:
+        return 0.0
+    return (a + d - expected) / den
+
+
+def critical_performance_ratio(a: int, b: int, c: int, d: int) -> float:
     """
-    Information-theoretic style skill score in [-1, 1]-ish range.
-    Positive => skillful match; low/negative => hedge / noise.
+    CPR — signal/(signal+noise) style honesty ratio.
+    Low CPR ⇒ hedged / unskilled retrieval ⇒ Kiosk / prune.
     """
-    q = _bit_vector(query, bits)
-    c = _bit_vector(chunk, bits)
-    a, b, c_miss, d = contingency(q, c, bits)
-    # Heidke-like skill: (ad - bc) / ((a+c)(b+d) + (a+b)(c+d) + eps) simplified
-    num = (a * d) - (b * c_miss)
-    den = ((a + c_miss) * (b + d)) + ((a + b) * (c_miss + d)) + 1e-9
-    return float(num) / float(den)
+    signal = float(a)
+    noise = float(b + c)
+    return signal / (signal + noise + 1e-9)
+
+
+def relevance_label(score: float, threshold: float) -> str:
+    if score >= max(threshold, 0.55):
+        return "High Relevance"
+    if score >= threshold:
+        return "Medium Relevance"
+    if score >= threshold * 0.5:
+        return "Low Relevance"
+    return "Noise / Hedge"
+
+
+def its_score_pair(query: str, chunk: str, bits: int = 512) -> dict[str, float | str | dict]:
+    q = mib_binarize(query, bits)
+    d = mib_binarize(chunk, bits)
+    table = contingency_table(q, d, bits)
+    hss = heidke_skill_score(table["a"], table["b"], table["c"], table["d"])
+    pss = peirce_skill_score(table["a"], table["b"], table["c"], table["d"])
+    cpr = critical_performance_ratio(table["a"], table["b"], table["c"], table["d"])
+    # Blend used as gatekeeper (brief: ITS replaces cosine)
+    its = 0.6 * hss + 0.4 * pss
+    thr = settings.its_threshold
+    return {
+        "its": its,
+        "hss": hss,
+        "pss": pss,
+        "cpr": cpr,
+        "table": table,
+        "label": relevance_label(its, thr),
+    }
+
+
+def its_skill_score(query: str, chunk: str, bits: int = 512) -> float:
+    return float(its_score_pair(query, chunk, bits)["its"])
 
 
 @dataclass
@@ -56,6 +134,9 @@ class GatedDocument:
     dropped: int
     kept: int
     scores: list[float]
+    labels: list[str] = field(default_factory=list)
+    kiosk_blocked: bool = False
+    details: list[dict] = field(default_factory=list)
 
 
 def gate_document(
@@ -65,16 +146,16 @@ def gate_document(
     threshold: float | None = None,
     enabled: bool = True,
     min_chunk_chars: int = 80,
+    kiosk_mode: bool = False,
 ) -> GatedDocument:
     """
-    Split document into chunks; drop low-ITS chunks.
-    If everything would drop, keep original (honesty fallback with full data).
+    Split document into chunks; drop low-ITS chunks (Drift-Terminator style).
+    Kiosk Mode: if no chunk clears threshold, block (honesty) instead of guessing.
     """
     if not enabled or not document.strip() or not query.strip():
         return GatedDocument(text=document, dropped=0, kept=1, scores=[])
 
     thr = settings.its_threshold if threshold is None else threshold
-    # Prefer page breaks, else paragraphs
     if "--- PAGE BREAK ---" in document:
         chunks = [c.strip() for c in document.split("--- PAGE BREAK ---") if c.strip()]
         joiner = "\n--- PAGE BREAK ---\n"
@@ -83,25 +164,83 @@ def gate_document(
         joiner = "\n\n"
 
     if len(chunks) <= 1:
+        if len(chunks) == 1:
+            detail = its_score_pair(query, chunks[0])
+            score = float(detail["its"])
+            if kiosk_mode and score < thr:
+                return GatedDocument(
+                    text="",
+                    dropped=1,
+                    kept=0,
+                    scores=[score],
+                    labels=[str(detail["label"])],
+                    kiosk_blocked=True,
+                    details=[detail],
+                )
         return GatedDocument(text=document, dropped=0, kept=len(chunks), scores=[])
 
     kept: list[str] = []
     scores: list[float] = []
+    labels: list[str] = []
+    details: list[dict] = []
     dropped = 0
     for ch in chunks:
+        detail = its_score_pair(query, ch)
+        score = float(detail["its"])
+        scores.append(score)
+        labels.append(str(detail["label"]))
+        details.append(detail)
         if len(ch) < min_chunk_chars:
             kept.append(ch)
-            scores.append(1.0)
             continue
-        score = its_skill_score(query, ch)
-        scores.append(score)
-        if score >= thr:
+        # Drift-Terminator: CPR + ITS below threshold ⇒ prune branch
+        cpr = float(detail["cpr"])
+        if score >= thr and cpr >= 0.35:
             kept.append(ch)
         else:
             dropped += 1
 
     if not kept:
-        # Never return empty #D — honesty means keep original if gate is too aggressive
-        return GatedDocument(text=document, dropped=0, kept=len(chunks), scores=scores)
+        if kiosk_mode:
+            return GatedDocument(
+                text="",
+                dropped=dropped or len(chunks),
+                kept=0,
+                scores=scores,
+                labels=labels,
+                kiosk_blocked=True,
+                details=details,
+            )
+        # Non-kiosk honesty fallback: keep original rather than empty #D
+        return GatedDocument(
+            text=document,
+            dropped=0,
+            kept=len(chunks),
+            scores=scores,
+            labels=labels,
+            details=details,
+        )
 
-    return GatedDocument(text=joiner.join(kept), dropped=dropped, kept=len(kept), scores=scores)
+    return GatedDocument(
+        text=joiner.join(kept),
+        dropped=dropped,
+        kept=len(kept),
+        scores=scores,
+        labels=labels,
+        details=details,
+    )
+
+
+def drift_terminator_rank(query: str, nodes: list[str], threshold: float | None = None) -> list[dict]:
+    """Rank graph-like text nodes; terminate low-skill branches."""
+    thr = settings.its_threshold if threshold is None else threshold
+    ranked = []
+    for node in nodes:
+        detail = its_score_pair(query, node)
+        skill = float(detail["its"])
+        if skill < thr:
+            ranked.append({**detail, "text": node[:200], "action": "terminate_branch"})
+        else:
+            ranked.append({**detail, "text": node[:200], "action": "augment_context"})
+    ranked.sort(key=lambda x: float(x["its"]), reverse=True)
+    return ranked

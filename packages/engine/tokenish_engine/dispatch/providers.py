@@ -1,84 +1,119 @@
+"""
+Provider dispatch + Argus-style fallback chain.
+
+Order when preferred provider fails / missing key:
+  ChatGPT (gpt-4o) → Gemini 3.5 → OpenRouter free roster
+"""
+
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, AsyncIterator
 
 import httpx
 
-from tokenish_engine.config import settings
+from tokenish_engine.config import gemini_key, openai_key, settings
+from tokenish_engine.dispatch.argus import run_preflight
 from tokenish_engine.models import ProviderStatus
+
+_ROUTING_PATH = Path(__file__).resolve().parent.parent / "routing.json"
+
+
+@dataclass
+class StreamSession:
+    """Filled when chat_stream successfully connects to a provider."""
+    provider: str | None = None
+    model: str | None = None
+    fallback_used: bool = False
+
+
+def _load_fallbacks() -> list[tuple[str, str]]:
+    try:
+        data = json.loads(_ROUTING_PATH.read_text(encoding="utf-8"))
+        raw = data.get("tasks", {}).get("chat", {}).get("fallbacks", [])
+        out: list[tuple[str, str]] = []
+        for item in raw:
+            if "/" not in item:
+                continue
+            prov, model = item.split("/", 1)
+            out.append((prov, model))
+        if out:
+            return out
+    except Exception:
+        pass
+    return [
+        ("openai", settings.openai_primary_model),
+        ("gemini", settings.gemini_model),
+        ("openrouter", settings.openrouter_free_model),
+    ]
 
 
 def resolve_provider(provider: str | None, model: str | None, target_engine: str) -> str:
     if provider and provider != "auto":
-        return provider.lower()
+        p = provider.lower().strip()
+        if p in {"google"}:
+            return "gemini"
+        if p in {"pplx"}:
+            return "perplexity"
+        return p
     blob = f"{model or ''} {target_engine or ''}".lower()
     if "claude" in blob or "anthropic" in blob:
         return "anthropic"
-    if "groq" in blob or "llama" in blob and "ollama" not in blob:
-        if "groq" in blob:
-            return "groq"
-    if any(x in blob for x in ("gpt", "openai", "o1", "o3", "o4")):
+    if "gemini" in blob or "google" in blob:
+        return "gemini"
+    if "perplexity" in blob or "sonar" in blob:
+        return "perplexity"
+    if "openrouter" in blob or ":free" in blob:
+        return "openrouter"
+    if any(x in blob for x in ("gpt", "openai", "o1", "o3", "o4", "chatgpt")):
         return "openai"
-    if "ollama" in blob or blob.startswith("llama") or "mistral" in blob or "qwen" in blob:
-        # Prefer ollama for local-style names when no cloud key implied
-        return "ollama"
-    # Default: ollama if up, else openai
-    return "ollama"
+    if "groq" in blob or "llama-3" in blob:
+        return "groq"
+    # Auto: prefer configured fallback order
+    if openai_key():
+        return "openai"
+    if gemini_key():
+        return "gemini"
+    if settings.openrouter_api_key:
+        return "openrouter"
+    if settings.perplexity_api_key:
+        return "perplexity"
+    if settings.anthropic_api_key:
+        return "anthropic"
+    if settings.groq_api_key:
+        return "groq"
+    return "openai"
+
+
+def _provider_ready(name: str) -> bool:
+    if name == "groq":
+        return bool(settings.groq_api_key)
+    if name == "gemini":
+        return bool(gemini_key())
+    if name == "openrouter":
+        return bool(settings.openrouter_api_key)
+    if name == "perplexity":
+        return bool(settings.perplexity_api_key)
+    if name == "openai":
+        return bool(openai_key())
+    if name == "anthropic":
+        return bool(settings.anthropic_api_key)
+    return False
 
 
 async def preflight() -> list[ProviderStatus]:
-    """Argus-style provider health check."""
-    statuses: list[ProviderStatus] = []
-
-    # Ollama
-    try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            r = await client.get(f"{settings.ollama_host.rstrip('/')}/api/tags")
-            if r.status_code == 200:
-                models = [m.get("name", "") for m in r.json().get("models", [])]
-                statuses.append(
-                    ProviderStatus(name="ollama", available=True, detail="ok", models=models)
-                )
-            else:
-                statuses.append(
-                    ProviderStatus(name="ollama", available=False, detail=f"HTTP {r.status_code}")
-                )
-    except Exception as exc:
-        statuses.append(ProviderStatus(name="ollama", available=False, detail=str(exc)))
-
-    statuses.append(
-        ProviderStatus(
-            name="openai",
-            available=bool(settings.openai_api_key),
-            detail="key set" if settings.openai_api_key else "OPENAI_API_KEY missing",
-            models=["gpt-4o", "gpt-4.1-mini", "gpt-4o-mini"],
-        )
-    )
-    statuses.append(
-        ProviderStatus(
-            name="anthropic",
-            available=bool(settings.anthropic_api_key),
-            detail="key set" if settings.anthropic_api_key else "ANTHROPIC_API_KEY missing",
-            models=["claude-sonnet-4-20250514", "claude-3-5-haiku-latest"],
-        )
-    )
-    statuses.append(
-        ProviderStatus(
-            name="groq",
-            available=bool(settings.groq_api_key),
-            detail="key set" if settings.groq_api_key else "GROQ_API_KEY missing",
-            models=["llama-3.3-70b-versatile", "llama-3.1-8b-instant"],
-        )
-    )
+    """Argus live health + key roster (Groq 70B/8B, Gemini 3.5, OpenRouter free)."""
+    statuses, _ = await run_preflight()
     return statuses
 
 
-def _user_content(
-    envelope: str,
-    image_b64: str | None,
-    image_mime: str | None,
-) -> Any:
+async def preflight_full() -> tuple[list[ProviderStatus], dict]:
+    return await run_preflight()
+
+
+def _user_content(envelope: str, image_b64: str | None, image_mime: str | None) -> Any:
     if image_b64:
         return [
             {"type": "text", "text": envelope},
@@ -88,6 +123,16 @@ def _user_content(
             },
         ]
     return envelope
+
+
+def _fallback_chain(provider: str, model: str) -> list[tuple[str, str]]:
+    chain: list[tuple[str, str]] = [(provider, model)]
+    for prov, mdl in _load_fallbacks():
+        if (prov, mdl) not in chain:
+            chain.append((prov, mdl))
+    # Only keep providers that have keys configured
+    ready = [(p, m) for p, m in chain if _provider_ready(p)]
+    return ready or chain
 
 
 async def chat_complete(
@@ -100,30 +145,21 @@ async def chat_complete(
     image_mime: str | None = None,
 ) -> str:
     history = history or []
-    if provider == "ollama":
-        return await _ollama_chat(model, envelope, history, image_b64)
-    if provider == "anthropic":
-        return await _anthropic_chat(model, envelope, history, image_b64, image_mime)
-    if provider == "groq":
-        return await _openai_compatible(
-            base_url="https://api.groq.com/openai/v1",
-            api_key=settings.groq_api_key or "",
-            model=model,
-            envelope=envelope,
-            history=history,
-            image_b64=None,  # groq text path
-            image_mime=None,
-        )
-    # openai default
-    return await _openai_compatible(
-        base_url="https://api.openai.com/v1",
-        api_key=settings.openai_api_key or "",
-        model=model,
-        envelope=envelope,
-        history=history,
-        image_b64=image_b64,
-        image_mime=image_mime,
-    )
+    errors: list[str] = []
+    for prov, mdl in _fallback_chain(provider, model):
+        try:
+            return await _dispatch_once(
+                provider=prov,
+                model=mdl,
+                envelope=envelope,
+                history=history,
+                image_b64=image_b64,
+                image_mime=image_mime,
+            )
+        except Exception as exc:
+            errors.append(f"{prov}/{mdl}: {exc}")
+            continue
+    raise RuntimeError("all providers failed — " + " | ".join(errors[:6]))
 
 
 async def chat_stream(
@@ -134,86 +170,112 @@ async def chat_stream(
     history: list[dict[str, str]] | None = None,
     image_b64: str | None = None,
     image_mime: str | None = None,
+    session: StreamSession | None = None,
 ) -> AsyncIterator[str]:
-    """Yield text deltas. Falls back to one-shot if streaming unsupported."""
-    # Simple reliable path: complete then yield once (UI still works).
-    # Streaming for ollama/openai implemented below.
     history = history or []
-    if provider == "ollama":
-        async for chunk in _ollama_stream(model, envelope, history, image_b64):
-            yield chunk
-        return
-    if provider == "openai" and settings.openai_api_key:
-        async for chunk in _openai_stream(
-            "https://api.openai.com/v1",
-            settings.openai_api_key,
-            model,
-            envelope,
-            history,
-            image_b64,
-            image_mime,
-        ):
-            yield chunk
-        return
-    text = await chat_complete(
-        provider=provider,
-        model=model,
-        envelope=envelope,
-        history=history,
-        image_b64=image_b64,
-        image_mime=image_mime,
-    )
-    yield text
+    requested = (provider, model)
+    for prov, mdl in _fallback_chain(provider, model):
+        try:
+            if prov in {"openai", "groq", "openrouter", "perplexity"}:
+                async for delta in _openai_compatible_stream(
+                    base_url=_base_url(prov),
+                    api_key=_api_key(prov) or "",
+                    model=mdl,
+                    envelope=envelope,
+                    history=history,
+                    image_b64=image_b64 if prov == "openai" else None,
+                    image_mime=image_mime if prov == "openai" else None,
+                    extra_headers=_extra_headers(prov),
+                ):
+                    if session and session.provider is None:
+                        session.provider = prov
+                        session.model = mdl
+                        session.fallback_used = (prov, mdl) != requested
+                    yield delta
+                if session and session.provider is None:
+                    session.provider = prov
+                    session.model = mdl
+                    session.fallback_used = (prov, mdl) != requested
+                return
+            text = await _dispatch_once(
+                provider=prov,
+                model=mdl,
+                envelope=envelope,
+                history=history,
+                image_b64=image_b64,
+                image_mime=image_mime,
+            )
+            if session:
+                session.provider = prov
+                session.model = mdl
+                session.fallback_used = (prov, mdl) != requested
+            yield text
+            return
+        except Exception:
+            continue
+    raise RuntimeError("all providers failed during stream")
 
 
-async def _ollama_chat(
+def _base_url(provider: str) -> str:
+    if provider == "groq":
+        return "https://api.groq.com/openai/v1"
+    if provider == "openrouter":
+        return "https://openrouter.ai/api/v1"
+    if provider == "perplexity":
+        return "https://api.perplexity.ai"
+    return "https://api.openai.com/v1"
+
+
+def _api_key(provider: str) -> str | None:
+    if provider == "groq":
+        return settings.groq_api_key
+    if provider == "openrouter":
+        return settings.openrouter_api_key
+    if provider == "perplexity":
+        return settings.perplexity_api_key
+    if provider == "openai":
+        return openai_key()
+    if provider == "gemini":
+        return gemini_key()
+    if provider == "anthropic":
+        return settings.anthropic_api_key
+    return None
+
+
+def _extra_headers(provider: str) -> dict[str, str]:
+    if provider == "openrouter":
+        return {
+            "HTTP-Referer": "https://github.com/AZaiTOCh/tokenish",
+            "X-Title": "tokenish",
+        }
+    return {}
+
+
+async def _dispatch_once(
+    *,
+    provider: str,
     model: str,
     envelope: str,
     history: list[dict[str, str]],
     image_b64: str | None,
+    image_mime: str | None,
 ) -> str:
-    messages = [{"role": h["role"], "content": h["content"]} for h in history]
-    msg: dict[str, Any] = {"role": "user", "content": envelope}
-    if image_b64:
-        msg["images"] = [image_b64]
-    messages.append(msg)
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        r = await client.post(
-            f"{settings.ollama_host.rstrip('/')}/api/chat",
-            json={"model": model, "messages": messages, "stream": False},
+    if provider == "anthropic":
+        return await _anthropic_chat(model, envelope, history, image_b64, image_mime)
+    if provider == "gemini":
+        return await _gemini_chat(model, envelope, history)
+    if provider in {"groq", "openai", "openrouter", "perplexity"}:
+        return await _openai_compatible(
+            base_url=_base_url(provider),
+            api_key=_api_key(provider) or "",
+            model=model,
+            envelope=envelope,
+            history=history,
+            image_b64=image_b64 if provider == "openai" else None,
+            image_mime=image_mime if provider == "openai" else None,
+            extra_headers=_extra_headers(provider),
         )
-        r.raise_for_status()
-        return r.json().get("message", {}).get("content", "")
-
-
-async def _ollama_stream(
-    model: str,
-    envelope: str,
-    history: list[dict[str, str]],
-    image_b64: str | None,
-) -> AsyncIterator[str]:
-    messages = [{"role": h["role"], "content": h["content"]} for h in history]
-    msg: dict[str, Any] = {"role": "user", "content": envelope}
-    if image_b64:
-        msg["images"] = [image_b64]
-    messages.append(msg)
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        async with client.stream(
-            "POST",
-            f"{settings.ollama_host.rstrip('/')}/api/chat",
-            json={"model": model, "messages": messages, "stream": True},
-        ) as r:
-            r.raise_for_status()
-            async for line in r.aiter_lines():
-                if not line:
-                    continue
-                try:
-                    data = json.loads(line)
-                except Exception:
-                    continue
-                content = data.get("message", {}).get("content")
-                if content:
-                    yield content
+    raise RuntimeError(f"unknown provider: {provider}")
 
 
 async def _openai_compatible(
@@ -225,6 +287,7 @@ async def _openai_compatible(
     history: list[dict[str, str]],
     image_b64: str | None,
     image_mime: str | None,
+    extra_headers: dict[str, str] | None = None,
 ) -> str:
     if not api_key:
         raise RuntimeError(f"API key missing for {base_url}")
@@ -234,17 +297,20 @@ async def _openai_compatible(
     messages.append(
         {"role": "user", "content": _user_content(envelope, image_b64, image_mime)}
     )
+    headers = {"Authorization": f"Bearer {api_key}", **(extra_headers or {})}
     async with httpx.AsyncClient(timeout=120.0) as client:
         r = await client.post(
             f"{base_url.rstrip('/')}/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}"},
+            headers=headers,
             json={"model": model, "messages": messages},
         )
-        r.raise_for_status()
+        if r.status_code >= 400:
+            raise RuntimeError(f"HTTP {r.status_code}: {r.text[:240]}")
         return r.json()["choices"][0]["message"]["content"]
 
 
-async def _openai_stream(
+async def _openai_compatible_stream(
+    *,
     base_url: str,
     api_key: str,
     model: str,
@@ -252,21 +318,27 @@ async def _openai_stream(
     history: list[dict[str, str]],
     image_b64: str | None,
     image_mime: str | None,
+    extra_headers: dict[str, str] | None = None,
 ) -> AsyncIterator[str]:
+    if not api_key:
+        raise RuntimeError(f"API key missing for {base_url}")
     messages: list[dict[str, Any]] = [
         {"role": h["role"], "content": h["content"]} for h in history
     ]
     messages.append(
         {"role": "user", "content": _user_content(envelope, image_b64, image_mime)}
     )
+    headers = {"Authorization": f"Bearer {api_key}", **(extra_headers or {})}
     async with httpx.AsyncClient(timeout=120.0) as client:
         async with client.stream(
             "POST",
             f"{base_url.rstrip('/')}/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}"},
+            headers=headers,
             json={"model": model, "messages": messages, "stream": True},
         ) as r:
-            r.raise_for_status()
+            if r.status_code >= 400:
+                body = await r.aread()
+                raise RuntimeError(f"HTTP {r.status_code}: {body[:240]!r}")
             async for line in r.aiter_lines():
                 if not line.startswith("data: "):
                     continue
@@ -282,6 +354,41 @@ async def _openai_stream(
                     continue
 
 
+async def _gemini_chat(model: str, envelope: str, history: list[dict[str, str]]) -> str:
+    key = gemini_key()
+    if not key:
+        raise RuntimeError("GEMINI_API_KEY / GOOGLE_API_KEY missing")
+    contents = []
+    for h in history:
+        role = "user" if h["role"] == "user" else "model"
+        contents.append({"role": role, "parts": [{"text": h["content"]}]})
+    contents.append({"role": "user", "parts": [{"text": envelope}]})
+
+    async def _call(mdl: str) -> httpx.Response:
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{mdl}:generateContent?key={key}"
+        )
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            return await client.post(
+                url,
+                headers={"Content-Type": "application/json"},
+                json={
+                    "contents": contents,
+                    "generationConfig": {"temperature": 0.2},
+                },
+            )
+
+    r = await _call(model)
+    if r.status_code == 404 and model != settings.gemini_model_fallback:
+        r = await _call(settings.gemini_model_fallback)
+    if r.status_code >= 400:
+        raise RuntimeError(f"gemini HTTP {r.status_code}: {r.text[:240]}")
+    data = r.json()
+    parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+    return "".join(p.get("text", "") for p in parts)
+
+
 async def _anthropic_chat(
     model: str,
     envelope: str,
@@ -294,12 +401,8 @@ async def _anthropic_chat(
     messages: list[dict[str, Any]] = []
     for h in history:
         messages.append({"role": h["role"], "content": h["content"]})
-    content: Any
     if image_b64:
-        media = (image_mime or "image/png").split("/")[-1]
-        if media == "jpg":
-            media = "jpeg"
-        content = [
+        content: Any = [
             {
                 "type": "image",
                 "source": {
@@ -323,6 +426,7 @@ async def _anthropic_chat(
             },
             json={"model": model, "max_tokens": 4096, "messages": messages},
         )
-        r.raise_for_status()
+        if r.status_code >= 400:
+            raise RuntimeError(f"anthropic HTTP {r.status_code}: {r.text[:240]}")
         blocks = r.json().get("content", [])
         return "".join(b.get("text", "") for b in blocks if b.get("type") == "text")

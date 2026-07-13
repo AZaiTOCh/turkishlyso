@@ -9,7 +9,8 @@ from tokenish_engine.compile import (
 from tokenish_engine.compress import compress_context, maybe_hi0_json_block
 from tokenish_engine.config import settings
 from tokenish_engine.ingest import IngestResult, ingest_file, merge_ingests
-from tokenish_engine.meters import make_meter
+from tokenish_engine.meters import compute_tokex
+from tokenish_engine.meters.tokens import count_tokens
 from tokenish_engine.models import CompileResult
 from tokenish_engine.retrieve import gate_document
 from tokenish_engine.vision import maybe_pack
@@ -25,16 +26,15 @@ def optimize(
     enable_pxpipe: bool | None = None,
     enable_headroom: bool | None = None,
     enable_its: bool | None = None,
+    kiosk_mode: bool | None = None,
 ) -> CompileResult:
-    """
-    Full Split-Execution optimizer pipeline.
-    Document body stays verbatim in #D unless ITS drops irrelevant chunks
-    or pxpipe packs dense text into a vision image (pointer + image).
-    """
     stages: list[str] = ["ingest", "lcs"]
     use_pxpipe = settings.enable_pxpipe if enable_pxpipe is None else enable_pxpipe
     use_headroom = settings.enable_headroom if enable_headroom is None else enable_headroom
     use_its = settings.enable_its if enable_its is None else enable_its
+    use_kiosk = settings.kiosk_mode if kiosk_mode is None else kiosk_mode
+    its_meta: dict = {}
+    kiosk_blocked = False
 
     parts: list[IngestResult] = []
     for name, data in files or []:
@@ -46,7 +46,6 @@ def optimize(
     image_mime = ingested.image_mime
     data_type = ingested.data_type or "text"
 
-    # Hi0 only for JSON-shaped attachments (structured), never arbitrary prose docs
     stripped = raw_doc.strip()
     if raw_doc and (data_type == "json" or stripped.startswith("{") or stripped.startswith("[")):
         packed, applied = maybe_hi0_json_block(raw_doc)
@@ -54,26 +53,32 @@ def optimize(
             raw_doc = packed
             stages.append("hi0")
 
-    # Headroom on large non-primary? For Split-Execution golden rule we do NOT
-    # semantically compress #D. Headroom is only applied to compressible tool/log-like
-    # CSV/log dumps when savings are positive AND type looks like logs.
     if use_headroom and data_type in {"log", "txt", "csv"} and len(raw_doc) > 4000:
         compressed, applied, stage = compress_context(raw_doc)
         if applied:
-            # Still preserve content via whitespace/dedupe only
             raw_doc = compressed
             stages.append(stage)
 
-    # ITS gate for multi-chunk docs
     if use_its and raw_doc:
-        gated = gate_document(prompt, raw_doc, enabled=True)
-        if gated.dropped > 0 and gated.text != raw_doc:
+        gated = gate_document(prompt, raw_doc, enabled=True, kiosk_mode=use_kiosk)
+        its_meta = {
+            "dropped": gated.dropped,
+            "kept": gated.kept,
+            "scores": gated.scores,
+            "labels": gated.labels,
+            "kiosk_blocked": gated.kiosk_blocked,
+        }
+        if gated.kiosk_blocked:
+            kiosk_blocked = True
+            raw_doc = ""
+            stages.append("its_kiosk_block")
+        elif gated.dropped > 0 and gated.text != raw_doc:
             raw_doc = gated.text
             stages.append(f"its_drop_{gated.dropped}")
 
-    # Conditional pxpipe (vision pack) — replaces dense #D text with pointer+image
     px_applied = False
-    if use_pxpipe and raw_doc and not image_b64:
+    px_surcharge = 0
+    if use_pxpipe and raw_doc and not image_b64 and not kiosk_blocked:
         pointer, pb64, pmime, px_applied = maybe_pack(
             raw_doc,
             model=model,
@@ -81,27 +86,32 @@ def optimize(
             enabled=True,
         )
         if px_applied:
-            # Keep original in metadata path: envelope gets pointer; image carries text
-            # Verbatim guarantee: original text is encoded in the image pixels.
             raw_doc = pointer
             image_b64, image_mime = pb64, pmime
+            px_surcharge = settings.pxpipe_image_tokens
             stages.append("pxpipe")
 
     nodes = compress_instructions(prompt)
-    envelope = assemble_envelope(
-        nodes,
-        raw_doc,
-        data_type,
-        target_engine=model or target_engine,
-        page_range=page_range,
-    )
+    if kiosk_blocked:
+        envelope = (
+            "#C Expert[HonestyGate]\n"
+            "#L 1.RefuseGuess -> 2.AskForBetterSource\n"
+            "#O Format:StaticUnknown\n\n"
+            "Kiosk Mode: ITS skill scores fell below threshold. "
+            "No low-relevance context was injected."
+        )
+    else:
+        envelope = assemble_envelope(
+            nodes,
+            raw_doc,
+            data_type,
+            target_engine=model or target_engine,
+            page_range=page_range,
+        )
 
     baseline = baseline_prompt(prompt, ingested.raw_text or "")
-    from tokenish_engine.meters.tokens import count_tokens
 
-    # Mode picker: if LCS scaffolding costs more than the cleaned prompt (common on
-    # short chats with no attachments), fall back to cleaned instruction + raw #D.
-    if not px_applied:
+    if not px_applied and not kiosk_blocked:
         clean = nodes.get("clean_prompt") or prompt
         if raw_doc:
             fallback = (
@@ -114,36 +124,34 @@ def optimize(
             envelope = fallback
             stages.append("lcs_fallback_cheaper")
 
-    # Lossless check for non-pxpipe path
-    if not px_applied and raw_doc and not document_verbatim_in_envelope(envelope, raw_doc):
-        raise RuntimeError("Split-Execution violation: document text missing from envelope")
+    if not px_applied and not kiosk_blocked and raw_doc:
+        if not document_verbatim_in_envelope(envelope, raw_doc):
+            raise RuntimeError("Split-Execution violation: document text missing from envelope")
 
-    # For meter when pxpipe: compare baseline text tokens vs pointer+flat image token estimate
-    if px_applied:
-        from tokenish_engine.config import settings as st
-        from tokenish_engine.models import MeterReport
-
-        opt_tokens = count_tokens(envelope) + st.pxpipe_image_tokens
-        orig = count_tokens(baseline)
-        saved = max(0, orig - opt_tokens)
-        pct = (saved / orig * 100.0) if orig else 0.0
-        meter = MeterReport(
-            original_tokens=orig,
-            optimized_tokens=opt_tokens,
-            saved_tokens=saved,
-            saved_pct=round(pct, 2),
-            stages=stages,
-        )
-    else:
-        meter = make_meter(baseline, envelope, stages)
+    tokex = compute_tokex(
+        baseline_text=baseline,
+        optimized_text=envelope,
+        stages=stages,
+        pxpipe_image_tokens=px_surcharge,
+        fact_notes=[
+            "TOTAL_TOKEX = tokens(raw prompt + raw attachments)",
+            "TOKEX_THIS_RUN = tokens(optimized envelope)"
+            + (f" + pxpipe_image({px_surcharge})" if px_surcharge else ""),
+            "SAVED_TOKEX = max(0, TOTAL_TOKEX - TOKEX_THIS_RUN)",
+            "SAVED_PCT = 100 * SAVED_TOKEX / TOTAL_TOKEX",
+        ],
+    )
 
     return CompileResult(
         envelope=envelope,
         nodes=nodes,
-        meter=meter,
+        meter=tokex,
+        tokex=tokex,
         data_type=data_type,
         image_b64=image_b64,
         image_mime=image_mime,
         stages=stages,
         pxpipe_applied=px_applied,
+        its=its_meta,
+        kiosk_blocked=kiosk_blocked,
     )

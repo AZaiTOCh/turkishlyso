@@ -1,16 +1,14 @@
-from tokenish_engine.meters.tokens import count_tokens
-from tokenish_engine.models import MeterReport
+from tokenish_engine.meters.tokens import count_tokens, tokenizer_name
+from tokenish_engine.meters.tokex import compute_tokex
+from tokenish_engine.models import TokexReport
 
 
-def make_meter(original: str, optimized: str, stages: list[str] | None = None) -> MeterReport:
-    orig = count_tokens(original)
-    opt = count_tokens(optimized)
-    saved = max(0, orig - opt)
-    pct = (saved / orig * 100.0) if orig else 0.0
-    return MeterReport(
-        original_tokens=orig,
-        optimized_tokens=opt,
-        saved_tokens=saved,
-        saved_pct=round(pct, 2),
-        stages=list(stages or []),
+def make_meter(original: str, optimized: str, stages: list[str] | None = None) -> TokexReport:
+    return compute_tokex(
+        baseline_text=original,
+        optimized_text=optimized,
+        stages=stages,
     )
+
+
+__all__ = ["count_tokens", "tokenizer_name", "compute_tokex", "make_meter", "TokexReport"]

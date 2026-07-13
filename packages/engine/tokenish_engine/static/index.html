@@ -1,56 +1,58 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Tokenish</title>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <title>tokenish</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/ui/styles.css" />
 </head>
 <body>
   <div class="app">
     <aside class="sidebar">
       <div class="brand">
-        <h1>Tokenish</h1>
-        <span>Split-Execution token saver</span>
+        <h1>tokenish</h1>
+        <span>token use optimizer</span>
       </div>
-      <div class="section-label">Provider</div>
+      <div class="section-label">provider</div>
       <select id="provider">
         <option value="auto">auto</option>
-        <option value="ollama">ollama</option>
-        <option value="openai">openai</option>
+                <option value="openai">openai</option>
         <option value="anthropic">anthropic</option>
         <option value="groq">groq</option>
+        <option value="gemini">gemini</option>
+        <option value="openrouter">openrouter</option>
+        <option value="perplexity">perplexity</option>
       </select>
-      <div class="section-label">Model</div>
+      <div class="section-label">model</div>
       <input id="model" list="models" value="gpt-4o" placeholder="model id" />
       <datalist id="models"></datalist>
-      <div class="section-label">Providers</div>
+      <div class="section-label">status</div>
       <div class="provider-list" id="providers"></div>
-      <div class="section-label">Optimizer</div>
-      <div class="toggles">
-        <label><input type="checkbox" id="pxpipe" checked /> pxpipe (vision pack)</label>
-        <label><input type="checkbox" id="headroom" checked /> headroom</label>
-        <label><input type="checkbox" id="its" checked /> ITS gate</label>
-        <label><input type="checkbox" id="showEnv" checked /> show compiled envelope</label>
-      </div>
-      <div class="section-label">PDF page range</div>
+      <div class="section-label">pdf page range</div>
       <input id="pageRange" type="text" placeholder="e.g. 12-15" />
     </aside>
     <main class="main">
       <div class="topbar">
-        <div class="meter" id="meter">Token meter appears after each send</div>
-        <button class="btn" id="newChat">New chat</button>
+        <div class="tokex-panel" id="tokexPanel">
+          <div class="tokex-big" id="tokexSaved">Saved Tokens 0%</div>
+          <div class="tokex-grid">
+            <div><span class="k">before</span><span id="tokexTotal">0</span></div>
+            <div><span class="k">after</span><span id="tokexRun">0</span></div>
+            <div><span class="k">saved</span><span id="tokexPct">0 (0%)</span></div>
+          </div>
+        </div>
+        <button class="btn" id="newChat">new chat</button>
       </div>
       <div class="messages" id="messages"></div>
       <div class="composer">
         <div class="attachments" id="attachments"></div>
         <div class="error" id="error" hidden></div>
         <div class="row">
-          <button class="btn" id="attachBtn">Attach</button>
+          <button class="btn" id="attachBtn">attach</button>
           <input id="fileInput" type="file" multiple hidden accept=".pdf,.docx,.doc,.xlsx,.xls,.csv,.txt,.md,.json,.png,.jpg,.jpeg,.webp" />
-          <textarea id="prompt" placeholder="Message Tokenish…"></textarea>
-          <button class="btn primary" id="sendBtn">Send</button>
+          <textarea id="prompt" placeholder="message tokenish..."></textarea>
+          <button class="btn primary" id="sendBtn">send</button>
         </div>
       </div>
     </main>
@@ -58,3 +60,4 @@
   <script src="/ui/app.js"></script>
 </body>
 </html>
+

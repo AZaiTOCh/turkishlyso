@@ -1,0 +1,28 @@
+{
+  "routing_engine_version": "1.1.0",
+  "tasks": {
+    "chat": {
+      "preferred_provider": "auto",
+      "fallbacks": [
+        "openai/gpt-4o",
+        "gemini/gemini-3.5-flash",
+        "openrouter/openrouter/free",
+        "openrouter/meta-llama/llama-3.3-70b-instruct:free"
+      ]
+    }
+  },
+  "openrouter_free_roster": {
+    "verified_active": [
+      "openrouter/free",
+      "google/gemma-2-9b-it:free",
+      "meta-llama/llama-3.3-70b-instruct:free"
+    ]
+  },
+  "providers": {
+    "openai": { "is_active": true, "models": ["gpt-4o", "gpt-4o-mini"] },
+    "gemini": { "is_active": true, "models": ["gemini-3.5-flash", "gemini-3.1-pro-preview"] },
+    "openrouter": { "is_active": true, "models": ["openrouter/free"] },
+    "perplexity": { "is_active": false, "models": ["sonar", "sonar-pro"] },
+    "anthropic": { "is_active": false, "models": ["claude-sonnet-4-20250514", "claude-3-5-haiku-latest"] }
+  }
+}

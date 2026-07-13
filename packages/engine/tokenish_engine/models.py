@@ -5,12 +5,23 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
-class MeterReport(BaseModel):
-    original_tokens: int
-    optimized_tokens: int
-    saved_tokens: int
-    saved_pct: float
+class TokexReport(BaseModel):
+    """Fact-checked Token Expenditure rollup for one optimize/chat run."""
+
+    total_tokex: int = Field(description="Counterfactual tokens without optimization")
+    tokex_this_run: int = Field(description="Actual optimized tokens for this run")
+    saved_tokex: int = Field(description="TOTAL_TOKEX - TOKEX_THIS_RUN (floored at 0)")
+    saved_pct: float = Field(description="100 * saved_tokex / total_tokex")
     stages: list[str] = Field(default_factory=list)
+    fact_notes: list[str] = Field(default_factory=list)
+    # Aliases for older clients
+    original_tokens: int = 0
+    optimized_tokens: int = 0
+    saved_tokens: int = 0
+
+
+# Back-compat name
+MeterReport = TokexReport
 
 
 class IngestResult(BaseModel):
@@ -25,12 +36,15 @@ class IngestResult(BaseModel):
 class CompileResult(BaseModel):
     envelope: str
     nodes: dict[str, str]
-    meter: MeterReport
+    meter: TokexReport
+    tokex: TokexReport | None = None
     data_type: str
     image_b64: str | None = None
     image_mime: str | None = None
     stages: list[str] = Field(default_factory=list)
     pxpipe_applied: bool = False
+    its: dict[str, Any] = Field(default_factory=dict)
+    kiosk_blocked: bool = False
 
 
 class ChatMessage(BaseModel):

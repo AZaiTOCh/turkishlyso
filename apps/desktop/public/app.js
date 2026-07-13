@@ -1,5 +1,5 @@
+
 const messagesEl = document.getElementById("messages");
-const meterEl = document.getElementById("meter");
 const errorEl = document.getElementById("error");
 const promptEl = document.getElementById("prompt");
 const fileInput = document.getElementById("fileInput");
@@ -19,31 +19,35 @@ function renderAttachments() {
   attachmentsEl.innerHTML = files.map((f) => `<span class="chip">${f.name}</span>`).join("");
 }
 
-function addBubble(role, content, meta = {}) {
-  const div = document.createElement("div");
-  div.className = `bubble ${role}`;
-  const metaBits = [role];
-  if (meta.provider) metaBits.push(`${meta.provider}/${meta.model || ""}`);
-  if (meta.meter) {
-    metaBits.push(
-      `${meta.meter.original_tokens}→${meta.meter.optimized_tokens} (−${meta.meter.saved_pct}%)`
-    );
-  }
-  let html = `<div class="meta">${metaBits.join(" · ")}</div>${escapeHtml(content)}`;
-  if (document.getElementById("showEnv").checked && meta.envelope) {
-    html += `<div class="envelope">${escapeHtml(meta.envelope)}</div>`;
-  }
-  div.innerHTML = html;
-  messagesEl.appendChild(div);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
-  return div;
-}
-
 function escapeHtml(s) {
   return String(s)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
+}
+
+function renderTokex(t) {
+  const saved = t ? (t.saved_tokex ?? t.saved_tokens ?? 0) : 0;
+  const total = t ? (t.total_tokex ?? t.original_tokens ?? 0) : 0;
+  const run = t ? (t.tokex_this_run ?? t.optimized_tokens ?? 0) : 0;
+  const pct = t ? (t.saved_pct ?? 0) : 0;
+  document.getElementById("tokexSaved").textContent = `Saved Tokens ${pct}%`;
+  document.getElementById("tokexTotal").textContent = Number(total).toLocaleString();
+  document.getElementById("tokexRun").textContent = Number(run).toLocaleString();
+  document.getElementById("tokexPct").textContent = `${Number(saved).toLocaleString()} (${pct}%)`;
+}
+
+function addBubble(role, content, meta = {}) {
+  const div = document.createElement("div");
+  div.className = `bubble ${role}`;
+  const bits = [role];
+  if (meta.provider) bits.push(`${meta.provider}/${meta.model || ""}`);
+  const t = meta.tokex || meta.meter;
+  if (t) bits.push(`saved ${t.saved_tokex ?? t.saved_tokens} (${t.saved_pct}%)`);
+  div.innerHTML = `<div class="meta">${bits.join(" · ")}</div>${escapeHtml(content)}`;
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  return div;
 }
 
 async function loadProviders() {
@@ -58,14 +62,16 @@ async function loadProviders() {
       row.innerHTML = `<span><span class="dot ${p.available ? "ok" : "bad"}"></span>${p.name}</span><span style="color:var(--muted);font-size:0.75rem">${p.detail}</span>`;
       providersEl.appendChild(row);
       (p.models || []).forEach((m) => modelSet.add(m));
-      if (p.name === "ollama" && p.available && p.models?.length) {
-        document.getElementById("provider").value = "ollama";
-        document.getElementById("model").value = p.models[0];
-      }
     }
     modelsList.innerHTML = [...modelSet].map((m) => `<option value="${m}"></option>`).join("");
+    const pref = data.preferred;
+    if (pref?.provider && pref?.model) {
+      document.getElementById("provider").value =
+        pref.provider === "openai" || pref.provider === "groq" ? "auto" : pref.provider;
+      document.getElementById("model").value = pref.model;
+    }
   } catch {
-    showError("Engine offline");
+    showError("engine offline");
   }
 }
 
@@ -86,10 +92,7 @@ async function send() {
   fd.append("provider", provider);
   fd.append("history", JSON.stringify(history.slice(0, -1)));
   fd.append("stream", "true");
-  fd.append("show_envelope", String(document.getElementById("showEnv").checked));
-  fd.append("enable_pxpipe", String(document.getElementById("pxpipe").checked));
-  fd.append("enable_headroom", String(document.getElementById("headroom").checked));
-  fd.append("enable_its", String(document.getElementById("its").checked));
+  fd.append("show_envelope", "false");
   const pageRange = document.getElementById("pageRange").value.trim();
   if (pageRange) fd.append("page_range", pageRange);
   for (const f of files) fd.append("files", f);
@@ -113,27 +116,23 @@ async function send() {
       for (const line of lines) {
         if (!line.trim()) continue;
         let evt;
-        try {
-          evt = JSON.parse(line);
-        } catch {
-          continue;
-        }
+        try { evt = JSON.parse(line); } catch { continue; }
         if (evt.type === "meta") {
           meta = evt;
-          if (evt.meter) {
-            meterEl.innerHTML = `before <strong>${evt.meter.original_tokens}</strong> · after <strong>${evt.meter.optimized_tokens}</strong> · saved <strong>${evt.meter.saved_tokens}</strong> (${evt.meter.saved_pct}%) · ${(evt.stages || []).join(" → ")}`;
-          }
+          renderTokex(evt.tokex || evt.meter);
+        } else if (evt.type === "routing") {
+          meta.provider = evt.provider;
+          meta.model = evt.model;
+          meta.fallback_used = evt.fallback_used;
         } else if (evt.type === "delta") {
           assistant += evt.text || "";
-          bubble.innerHTML = `<div class="meta">assistant${meta.provider ? ` · ${meta.provider}/${meta.model}` : ""}${
-            meta.meter
-              ? ` · ${meta.meter.original_tokens}→${meta.meter.optimized_tokens} (−${meta.meter.saved_pct}%)`
-              : ""
-          }</div>${escapeHtml(assistant)}${
-            document.getElementById("showEnv").checked && meta.envelope
-              ? `<div class="envelope">${escapeHtml(meta.envelope)}</div>`
-              : ""
-          }`;
+          const t = meta.tokex || meta.meter;
+          const route = meta.provider
+            ? `${meta.provider}/${meta.model}${meta.fallback_used ? " (fallback)" : ""}`
+            : "";
+          bubble.innerHTML = `<div class="meta">assistant${route ? ` · ${route}` : ""}${
+            t ? ` · saved ${t.saved_tokex ?? t.saved_tokens} (${t.saved_pct}%)` : ""
+          }</div>${escapeHtml(assistant)}`;
           messagesEl.scrollTop = messagesEl.scrollHeight;
         } else if (evt.type === "error") {
           throw new Error(evt.error || "chat failed");
@@ -146,7 +145,7 @@ async function send() {
     renderAttachments();
   } catch (e) {
     showError(e.message || String(e));
-    bubble.innerHTML = `<div class="meta">assistant</div>${escapeHtml("Error: " + (e.message || e))}`;
+    bubble.innerHTML = `<div class="meta">assistant</div>${escapeHtml("error: " + (e.message || e))}`;
   }
 }
 
@@ -159,10 +158,7 @@ document.getElementById("sendBtn").onclick = () => send();
 document.getElementById("newChat").onclick = () => {
   history = [];
   messagesEl.innerHTML = "";
-  addBubble(
-    "assistant",
-    "Drop a PDF, DOCX, XLSX, CSV, or image. Your prompt is LCS-compressed; document text stays verbatim in #D."
-  );
+  addBubble("assistant", "attach a pdf, docx, xlsx, csv, or image. tokenish optimizes every send automatically.");
 };
 promptEl.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
@@ -171,8 +167,5 @@ promptEl.addEventListener("keydown", (e) => {
   }
 });
 
-addBubble(
-  "assistant",
-  "Drop a PDF, DOCX, XLSX, CSV, or image. Your prompt is LCS-compressed; document text stays verbatim in #D. Pick a local or cloud model and send."
-);
+addBubble("assistant", "attach a pdf, docx, xlsx, csv, or image. tokenish optimizes every send automatically.");
 loadProviders();

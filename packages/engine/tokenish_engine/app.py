@@ -10,10 +10,12 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from tokenish_engine import __version__
-from tokenish_engine.dispatch import chat_complete, chat_stream, preflight, resolve_provider
+from tokenish_engine.dispatch import chat_complete, chat_stream, preflight, preflight_full, resolve_provider
+from tokenish_engine.dispatch.providers import StreamSession
 from tokenish_engine.pipeline import optimize
+from tokenish_engine.retrieve import moorcheh_available
 
-app = FastAPI(title="Tokenish Optimizer Engine", version=__version__)
+app = FastAPI(title="tokenish", version=__version__)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -32,20 +34,23 @@ async def root_ui():
     index = _STATIC / "index.html"
     if index.is_file():
         return FileResponse(index)
-    return JSONResponse(
-        {"status": "ok", "version": __version__, "ui": "missing static/index.html"}
-    )
+    return JSONResponse({"status": "ok", "version": __version__})
 
 
 @app.get("/health")
 async def health() -> dict[str, Any]:
-    return {"status": "ok", "version": __version__}
+    return {"status": "ok", "version": __version__, "moorcheh_sdk": moorcheh_available()}
 
 
 @app.get("/providers")
 async def providers() -> dict[str, Any]:
-    statuses = await preflight()
-    return {"providers": [s.model_dump() for s in statuses]}
+    statuses, meta = await preflight_full()
+    return {
+        "providers": [s.model_dump() for s in statuses],
+        "preferred": meta.get("preferred"),
+        "fallback_chain": meta.get("fallback_chain"),
+        "openrouter_free_roster": meta.get("openrouter_free_roster"),
+    }
 
 
 async def _read_uploads(files: list[UploadFile] | None) -> list[tuple[str, bytes]]:
@@ -70,15 +75,17 @@ def _parse_history(history: str | None) -> list[dict[str, str]]:
         return []
 
 
+def _tokex_payload(compiled) -> dict[str, Any]:
+    t = compiled.tokex or compiled.meter
+    return t.model_dump()
+
+
 @app.post("/compile")
 async def compile_endpoint(
     prompt: str = Form(...),
     target_engine: str = Form("gpt-4o"),
     model: str | None = Form(None),
     page_range: str | None = Form(None),
-    enable_pxpipe: bool | None = Form(None),
-    enable_headroom: bool | None = Form(None),
-    enable_its: bool | None = Form(None),
     files: list[UploadFile] | None = File(None),
 ) -> JSONResponse:
     uploads = await _read_uploads(files)
@@ -88,13 +95,8 @@ async def compile_endpoint(
         model=model,
         files=uploads,
         page_range=page_range,
-        enable_pxpipe=enable_pxpipe,
-        enable_headroom=enable_headroom,
-        enable_its=enable_its,
     )
-    payload = result.model_dump()
-    # Don't echo huge base64 in compile-only unless needed — keep it
-    return JSONResponse(payload)
+    return JSONResponse(result.model_dump())
 
 
 @app.post("/chat")
@@ -106,10 +108,6 @@ async def chat_endpoint(
     history: str | None = Form(None),
     page_range: str | None = Form(None),
     stream: bool = Form(False),
-    show_envelope: bool = Form(False),
-    enable_pxpipe: bool | None = Form(None),
-    enable_headroom: bool | None = Form(None),
-    enable_its: bool | None = Form(None),
     files: list[UploadFile] | None = File(None),
 ):
     uploads = await _read_uploads(files)
@@ -119,13 +117,11 @@ async def chat_endpoint(
         model=model,
         files=uploads,
         page_range=page_range,
-        enable_pxpipe=enable_pxpipe,
-        enable_headroom=enable_headroom,
-        enable_its=enable_its,
     )
     hist = _parse_history(history)
     prov = resolve_provider(provider, model, target_engine)
     mdl = model or target_engine
+    tokex = _tokex_payload(compiled)
 
     if stream:
         async def gen():
@@ -133,14 +129,27 @@ async def chat_endpoint(
                 "type": "meta",
                 "provider": prov,
                 "model": mdl,
-                "meter": compiled.meter.model_dump(),
+                "tokex": tokex,
+                "meter": tokex,
                 "stages": compiled.stages,
-                "pxpipe_applied": compiled.pxpipe_applied,
+                "kiosk_blocked": compiled.kiosk_blocked,
             }
-            if show_envelope:
-                meta["envelope"] = compiled.envelope
             yield json.dumps(meta) + "\n"
+            if compiled.kiosk_blocked:
+                yield json.dumps(
+                    {
+                        "type": "delta",
+                        "text": (
+                            "honesty gate: retrieval skill scores were too low. "
+                            "no hedged answer was generated from weak context."
+                        ),
+                    }
+                ) + "\n"
+                yield json.dumps({"type": "done"}) + "\n"
+                return
             try:
+                session = StreamSession()
+                routing_sent = False
                 async for delta in chat_stream(
                     provider=prov,
                     model=mdl,
@@ -148,13 +157,41 @@ async def chat_endpoint(
                     history=hist,
                     image_b64=compiled.image_b64,
                     image_mime=compiled.image_mime,
+                    session=session,
                 ):
+                    if session.provider and not routing_sent:
+                        routing_sent = True
+                        if session.fallback_used or session.provider != prov:
+                            yield json.dumps(
+                                {
+                                    "type": "routing",
+                                    "provider": session.provider,
+                                    "model": session.model,
+                                    "fallback_used": session.fallback_used,
+                                }
+                            ) + "\n"
+                            prov = session.provider
+                            mdl = session.model or mdl
                     yield json.dumps({"type": "delta", "text": delta}) + "\n"
                 yield json.dumps({"type": "done"}) + "\n"
             except Exception as exc:
                 yield json.dumps({"type": "error", "error": str(exc)}) + "\n"
 
         return StreamingResponse(gen(), media_type="application/x-ndjson")
+
+    if compiled.kiosk_blocked:
+        return JSONResponse(
+            {
+                "reply": (
+                    "honesty gate: retrieval skill scores were too low. "
+                    "no hedged answer was generated from weak context."
+                ),
+                "provider": prov,
+                "model": mdl,
+                "tokex": tokex,
+                "compile": compiled.model_dump(),
+            }
+        )
 
     try:
         reply = await chat_complete(
@@ -169,6 +206,7 @@ async def chat_endpoint(
         return JSONResponse(
             {
                 "error": str(exc),
+                "tokex": tokex,
                 "compile": compiled.model_dump(),
                 "provider": prov,
                 "model": mdl,
@@ -176,14 +214,12 @@ async def chat_endpoint(
             status_code=502,
         )
 
-    body = {
-        "reply": reply,
-        "provider": prov,
-        "model": mdl,
-        "compile": compiled.model_dump(),
-    }
-    if not show_envelope:
-        body["compile"]["envelope"] = compiled.envelope[:500] + (
-            "…" if len(compiled.envelope) > 500 else ""
-        )
-    return JSONResponse(body)
+    return JSONResponse(
+        {
+            "reply": reply,
+            "provider": prov,
+            "model": mdl,
+            "tokex": tokex,
+            "compile": compiled.model_dump(),
+        }
+    )

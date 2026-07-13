@@ -1,46 +1,44 @@
 # tokenish
 
-Open-source **token-saver** platform: a simple desktop chat UI whose every prompt and attachment runs through a **Split-Execution Optimizer Engine**, then dispatches to the model you select (local Ollama or cloud APIs).
+Open-source **token use optimizer**: a local desktop chat UI whose every prompt and attachment runs through a **split-execution optimizer engine**, then dispatches to the model you select (local or cloud APIs).
 
-## Golden rule
+## golden rule
 
-- **Compress instructions** (LCS / shorthand).
-- **Never semantically compress document content** — extracted file text stays verbatim in `#D`.
+- compress **instructions** (lcs / shorthand)
+- never semantically compress **document content** — extracted file text stays verbatim in `#D`
 
-## Layout
+## layout
 
 ```
-apps/desktop          Ollama-like chat UI (Vite + React)
-packages/engine       FastAPI optimizer + model routers
+apps/desktop          chat ui sources
+packages/engine       fastapi optimizer + model routers
+docs/evals            evaluation protocols (gveb, tokex, energy)
 ```
 
-## Quick start
+optimizer stages (backend only — not shown in the ui): lcs, hi0, headroom, moorcheh-style its gate, conditional pxpipe.
 
-### One process (engine + Ollama-like UI)
+## quick start
 
 ```bash
 cd packages/engine
 python -m venv .venv
-.venv\Scripts\activate   # Windows
+.venv\Scripts\activate
 pip install -e ".[dev]"
 uvicorn tokenish_engine.app:app --reload --port 8741
 ```
 
-Open **http://127.0.0.1:8741/** — the desktop chat UI is served by the engine (no Node/npm required).
+open **http://127.0.0.1:8741/**
 
-Optional Vite React sources live under `apps/desktop/` if you later install Node.
+### optional env
 
-### Optional env
-
-| Variable | Provider |
+| variable | provider |
 |----------|----------|
-| `OPENAI_API_KEY` | OpenAI |
-| `ANTHROPIC_API_KEY` | Anthropic |
-| `GROQ_API_KEY` | Groq |
-| `OLLAMA_HOST` | default `http://127.0.0.1:11434` |
+| `GPT_TOKENISH` | openai (chatgpt) |
+| `GEMINI_API_KEY` | gemini 3.5 |
+| `OPENROUTER_API_KEY` | openrouter |
+| `ANTHROPIC_API_KEY` | anthropic |
+| `MOORCHEH_API_KEY` | optional moorcheh cloud sdk |
 
-OCR needs [Tesseract](https://github.com/tesseract-ocr/tesseract) on PATH (optional: `pip install -e ".[ocr]"`).
+## license
 
-## License
-
-MIT
+mit
