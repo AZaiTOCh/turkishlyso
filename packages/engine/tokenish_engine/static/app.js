@@ -235,30 +235,133 @@ function titleFromPrompt(prompt) {
   return t.length > 42 ? `${t.slice(0, 42)}…` : t;
 }
 
-async function refreshThreadTitle(thread, { useLlm = true } = {}) {
+function titleCaseWord(w) {
+  if (!w) return w;
+  return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+}
+
+/** Local 3-word title (works even if /title is unreachable / old JS cache). */
+function interpretTitleLocal(messages) {
+  const stop = new Set([
+    "the","a","an","and","or","to","of","in","on","for","with","as","by","at","from",
+    "is","are","was","be","this","that","it","i","you","we","my","your","please","want",
+    "need","deeply","attached","attachment","document","file","pdf","image","images",
+    "then","generate","check","online","sources","everything","page","one","two","three",
+  ]);
+  const blob = (messages || [])
+    .filter((m) => m && (m.role === "user" || m.role === "assistant"))
+    .map((m) => String(m.content || ""))
+    .join("\n")
+    .slice(0, 5000);
+  if (!blob.trim()) return "Fresh Token Thread";
+
+  const rules = [
+    [/unicombinator|freefactorial|freesar|g[- ]?triangle/i, "Combinatorics"],
+    [/gveb|waldo|raphael|bosch|visual exhaustion/i, "Benchmark"],
+    [/palette|color|colour|neon|painterly|brushstroke/i, "Palette"],
+    [/peer review|adversar|critique/i, "Critique"],
+    [/fact[- ]?check|vetting|validity/i, "Vetting"],
+    [/exec(utive)?\s*summary|brief/i, "Brief"],
+    [/animation|cel[- ]?shad|cartoon/i, "Animation"],
+    [/urban|street|parking|cityscape/i, "Cityscape"],
+    [/quantum|cryptograph/i, "Quantum"],
+    [/assess|analy/i, "Assessment"],
+  ];
+  const tasks = [
+    [/adversar|peer review|critique/i, "Critique"],
+    [/fact[- ]?check|vet|valid/i, "Audit"],
+    [/summar|brief|exec/i, "Brief"],
+    [/color|style|ratio|break\s*down/i, "Breakdown"],
+    [/synthes/i, "Synthesis"],
+    [/assess|analy/i, "Review"],
+  ];
+
+  const words = [];
+  const push = (w) => {
+    const t = titleCaseWord(String(w || "").replace(/[^A-Za-z0-9-]/g, ""));
+    if (!t || words.some((x) => x.toLowerCase() === t.toLowerCase())) return;
+    words.push(t);
+  };
+
+  for (const [re, label] of rules) {
+    if (re.test(blob)) { push(label); break; }
+  }
+  const counts = {};
+  for (const w of blob.toLowerCase().match(/[a-z][a-z0-9'-]{3,}/g) || []) {
+    if (stop.has(w)) continue;
+    counts[w] = (counts[w] || 0) + 1;
+  }
+  const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([w]) => w);
+  for (const w of ranked) {
+    if (words.length >= 2) break;
+    push(w);
+  }
+  for (const [re, label] of tasks) {
+    if (re.test(blob)) { push(label); break; }
+  }
+  for (const w of [...ranked, "Insight", "Session", "Thread"]) {
+    if (words.length >= 3) break;
+    push(w);
+  }
+  while (words.length < 3) words.push(["Alpha", "Signal", "Thread"][words.length]);
+  return words.slice(0, 3).join(" ");
+}
+
+function looksProvisionalTitle(title) {
+  const t = String(title || "").trim();
+  if (!t || t === "New chat" || t === "Fresh Token Thread") return true;
+  if (t.includes("…") || t.includes("...")) return true;
+  if (t.length > 36) return true;
+  const parts = t.split(/\s+/).filter(Boolean);
+  return parts.length !== 3;
+}
+
+function applyThreadTitle(thread, next) {
+  const title = String(next || "").trim();
+  if (!thread || !title) return false;
+  if (title === thread.title) return false;
+  thread.title = title;
+  thread.updatedAt = Date.now();
+  renderThreadList();
+  if (thread.id === activeId) renderTokexPanel(thread);
+  saveStore();
+  return true;
+}
+
+async function refreshThreadTitle(thread, { useLlm = false } = {}) {
   if (!thread) return;
   const messages = (thread.messages || [])
     .filter((m) => m.role === "user" || m.role === "assistant")
     .filter((m) => m.content && m.content !== WELCOME)
     .map((m) => ({ role: m.role, content: String(m.content || "").slice(0, 2000) }));
   if (messages.length < 2) return;
+
+  // Always apply local instantly so History updates even if /title lags.
+  if (!useLlm) {
+    applyThreadTitle(thread, interpretTitleLocal(messages));
+  }
+
   try {
     const res = await fetch("/title", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages, use_llm: useLlm }),
+      body: JSON.stringify({ messages, use_llm: !!useLlm }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.title) return;
-    const next = String(data.title).trim();
-    if (!next || next === thread.title) return;
-    thread.title = next;
-    thread.updatedAt = Date.now();
-    renderThreadList();
-    renderTokexPanel(thread);
-    saveStore();
+    if (res.ok && data.title) applyThreadTitle(thread, data.title);
   } catch {
-    // keep provisional title
+    // local title already applied when !useLlm
+  }
+}
+
+async function retitleAllThreads() {
+  for (const th of threads) {
+    const msgs = (th.messages || []).filter(
+      (m) => (m.role === "user" || m.role === "assistant") && m.content && m.content !== WELCOME,
+    );
+    if (msgs.length < 2) continue;
+    if (!looksProvisionalTitle(th.title)) continue;
+    await refreshThreadTitle(th, { useLlm: false });
   }
 }
 
@@ -628,4 +731,6 @@ document.getElementById("sideKeySave")?.addEventListener("click", () => handleKe
   fillModels(DEFAULT_MODELS);
   loadProviders();
   maybeShowKeyWizard();
+  // Rename old truncated prompt titles → 3-word interpreter titles.
+  retitleAllThreads();
 })();
