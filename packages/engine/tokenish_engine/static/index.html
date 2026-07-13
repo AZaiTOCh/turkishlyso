@@ -21,16 +21,31 @@
 
     <main class="main">
       <div class="topbar">
-        <div class="tokex-panel" id="tokexPanel">
-          <div class="tokex-big" id="tokexSaved">Saved Tokens 0%</div>
-          <div class="tokex-sub" id="tokexScope">lifetime grand total · all chats</div>
-          <div class="tokex-grid">
-            <div><span class="k">before</span><span id="tokexTotal">0</span></div>
-            <div><span class="k">after</span><span id="tokexRun">0</span></div>
-            <div><span class="k">saved</span><span id="tokexPct">0 (0%)</span></div>
+        <div class="tokex-row">
+          <div class="tokex-panel" id="tokexLifetimePanel">
+            <div class="tokex-label">lifetime</div>
+            <div class="tokex-big" id="lifeSaved">Saved Tokens 0%</div>
+            <div class="tokex-sub" id="lifeScope">grand total · all chats</div>
+            <div class="tokex-grid">
+              <div><span class="k">before</span><span id="lifeTotal">0</span></div>
+              <div><span class="k">after</span><span id="lifeRun">0</span></div>
+              <div><span class="k">saved</span><span id="lifePct">0 (0%)</span></div>
+            </div>
+            <div class="tokex-meta" id="lifeMeta" hidden></div>
+            <div class="tokex-sends" id="lifeSends" hidden></div>
           </div>
-          <div class="tokex-meta" id="tokexWeighted" hidden></div>
-          <div class="tokex-sends" id="tokexSends" hidden></div>
+          <div class="tokex-panel" id="tokexChatPanel">
+            <div class="tokex-label">this chat</div>
+            <div class="tokex-big" id="chatSaved">Saved Tokens 0%</div>
+            <div class="tokex-sub" id="chatScope">selected history thread</div>
+            <div class="tokex-grid">
+              <div><span class="k">before</span><span id="chatTotal">0</span></div>
+              <div><span class="k">after</span><span id="chatRun">0</span></div>
+              <div><span class="k">saved</span><span id="chatPct">0 (0%)</span></div>
+            </div>
+            <div class="tokex-meta" id="chatMeta" hidden></div>
+            <div class="tokex-sends" id="chatSends" hidden></div>
+          </div>
         </div>
       </div>
       <div class="messages" id="messages"></div>

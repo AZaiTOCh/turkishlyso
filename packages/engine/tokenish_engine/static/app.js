@@ -124,37 +124,33 @@ function formatReply(text) {
   return escapeHtml(s);
 }
 
-function renderTokexPanel() {
-  const t = normalizeTokex(lifetime);
-  lifetime = t;
+function fillTokexBox(prefix, t, scopeLabel) {
+  t = normalizeTokex(t);
   const before = t.before || 0;
   const after = t.after || 0;
   const saved = Math.max(0, t.saved || before - after);
-  // Grand total = total tokens saved / total tokens before (across all sends).
   const grandPct = before > 0 ? Math.round((saved / before) * 10000) / 100 : 0;
 
-  document.getElementById("tokexSaved").textContent = before
+  document.getElementById(`${prefix}Saved`).textContent = before
     ? `Saved Tokens ${grandPct}%`
     : "Saved Tokens 0%";
-  document.getElementById("tokexScope").textContent = t.sends.length
-    ? `lifetime grand total · ${t.sends.length} send${t.sends.length === 1 ? "" : "s"} · all chats`
-    : "lifetime grand total · all chats";
-  document.getElementById("tokexTotal").textContent = Number(before).toLocaleString();
-  document.getElementById("tokexRun").textContent = Number(after).toLocaleString();
-  document.getElementById("tokexPct").textContent = `${Number(saved).toLocaleString()} (${grandPct}%)`;
+  document.getElementById(`${prefix}Scope`).textContent = scopeLabel;
+  document.getElementById(`${prefix}Total`).textContent = Number(before).toLocaleString();
+  document.getElementById(`${prefix}Run`).textContent = Number(after).toLocaleString();
+  document.getElementById(`${prefix}Pct`).textContent = `${Number(saved).toLocaleString()} (${grandPct}%)`;
 
-  const weightedEl = document.getElementById("tokexWeighted");
+  const metaEl = document.getElementById(`${prefix}Meta`);
   if (t.sends.length > 1) {
-    weightedEl.hidden = false;
+    metaEl.hidden = false;
     const parts = t.sends.map((s) => Number(s.saved || 0).toLocaleString()).join(" + ");
-    weightedEl.textContent =
+    metaEl.textContent =
       `saved ${parts} = ${Number(saved).toLocaleString()} ÷ before ${Number(before).toLocaleString()} = ${grandPct}%`;
   } else {
-    weightedEl.hidden = true;
-    weightedEl.textContent = "";
+    metaEl.hidden = true;
+    metaEl.textContent = "";
   }
 
-  const sendsEl = document.getElementById("tokexSends");
+  const sendsEl = document.getElementById(`${prefix}Sends`);
   if (t.sends.length) {
     sendsEl.hidden = false;
     const recent = t.sends.slice(-8);
@@ -170,6 +166,29 @@ function renderTokexPanel() {
     sendsEl.hidden = true;
     sendsEl.innerHTML = "";
   }
+}
+
+function renderTokexPanel(thread) {
+  lifetime = normalizeTokex(lifetime);
+  fillTokexBox(
+    "life",
+    lifetime,
+    lifetime.sends.length
+      ? `grand total · ${lifetime.sends.length} send${lifetime.sends.length === 1 ? "" : "s"} · all chats`
+      : "grand total · all chats",
+  );
+
+  const th = thread || activeThread();
+  const chat = normalizeTokex(th?.tokex);
+  if (th) th.tokex = chat;
+  const title = th?.title ? th.title.slice(0, 36) : "this chat";
+  fillTokexBox(
+    "chat",
+    chat,
+    chat.sends.length
+      ? `${title} · ${chat.sends.length} send${chat.sends.length === 1 ? "" : "s"}`
+      : `${title} · no sends yet`,
+  );
 }
 
 function accumulateTokex(thread, report) {
@@ -278,7 +297,7 @@ function renderMessages(thread) {
   for (const m of thread.messages || []) {
     addBubble(m.role, m.content);
   }
-  renderTokexPanel();
+  renderTokexPanel(thread);
 }
 
 function selectThread(id) {
@@ -438,7 +457,7 @@ async function send() {
         try { evt = JSON.parse(line); } catch { continue; }
         if (evt.type === "meta") {
           accumulateTokex(thread, evt.tokex || evt.meter);
-          renderTokexPanel();
+          renderTokexPanel(thread);
           saveStore();
         } else if (evt.type === "delta") {
           if (!bubble) {

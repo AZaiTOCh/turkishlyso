@@ -134,20 +134,34 @@ select, input[type="text"], input[type="password"] {
   padding: 14px 20px; border-bottom: 1px solid var(--border);
   background: #fff;
 }
-.tokex-panel {
+.tokex-row {
   flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  min-width: 0;
+}
+.tokex-panel {
   background: #fafafa;
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 12px 16px;
   font-family: "IBM Plex Mono", monospace;
+  min-width: 0;
 }
-.tokex-big { font-size: 1.7rem; font-weight: 600; color: #18181b; margin: 4px 0 2px; }
+.tokex-label {
+  color: #71717a;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.tokex-big { font-size: 1.35rem; font-weight: 600; color: #18181b; margin: 4px 0 2px; }
 .tokex-sub { color: #71717a; font-size: 0.72rem; letter-spacing: 0.04em; margin-bottom: 8px; }
 .tokex-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; font-size: 0.82rem; color: #18181b; }
 .tokex-grid .k { display: block; color: #71717a; font-size: 0.68rem; letter-spacing: 0.06em; margin-bottom: 2px; }
 .tokex-last, .tokex-meta, .tokex-sends { margin-top: 8px; color: #71717a; font-size: 0.72rem; line-height: 1.45; }
-.tokex-sends { display: flex; flex-direction: column; gap: 2px; }
+.tokex-sends { display: flex; flex-direction: column; gap: 2px; max-height: 88px; overflow: auto; }
 .messages { overflow: auto; padding: 28px 24px 40px; display: flex; flex-direction: column; gap: 18px; background: #fff; }
 .bubble {
   max-width: min(720px, 92%); padding: 0; border-radius: 0;
@@ -243,6 +257,7 @@ aside input[type="password"], aside select#model {
 @media (max-width: 1100px) {
   .app { grid-template-columns: 200px 1fr; }
   .settings-sidebar { display: none; }
+  .tokex-row { grid-template-columns: 1fr; }
 }
 @media (max-width: 720px) {
   .app { grid-template-columns: 1fr; }
