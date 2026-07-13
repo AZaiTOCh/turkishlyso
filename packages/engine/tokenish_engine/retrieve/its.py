@@ -111,14 +111,20 @@ def its_score_pair(query: str, chunk: str, bits: int = 512) -> dict[str, float |
     hss = heidke_skill_score(table["a"], table["b"], table["c"], table["d"])
     pss = peirce_skill_score(table["a"], table["b"], table["c"], table["d"])
     cpr = critical_performance_ratio(table["a"], table["b"], table["c"], table["d"])
-    # Blend used as gatekeeper (brief: ITS replaces cosine)
-    its = 0.6 * hss + 0.4 * pss
+    # Moorcheh-style C+/C− RSS (info-theoretic) blended with HSS/PSS
+    from tokenish_engine.mib import retrieval_skill_score
+
+    rss, c_plus, c_minus = retrieval_skill_score(q, d, bits=bits)
+    its = 0.45 * hss + 0.25 * pss + 0.30 * max(-1.0, min(1.0, rss))
     thr = settings.its_threshold
     return {
         "its": its,
         "hss": hss,
         "pss": pss,
         "cpr": cpr,
+        "rss": rss,
+        "c_plus": c_plus,
+        "c_minus": c_minus,
         "table": table,
         "label": relevance_label(its, thr),
     }

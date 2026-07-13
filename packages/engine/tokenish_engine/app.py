@@ -41,12 +41,9 @@ if _STATIC.is_dir():
 
 
 class KeysPayload(BaseModel):
-    GPT_TOKENISH: str | None = None
-    OPENAI_API_KEY: str | None = None
     GEMINI_API_KEY: str | None = None
     GOOGLE_API_KEY: str | None = None
     OPENROUTER_API_KEY: str | None = None
-    ANTHROPIC_API_KEY: str | None = None
 
 
 @app.get("/")
@@ -64,35 +61,44 @@ async def health() -> dict[str, Any]:
 
 @app.get("/settings/keys")
 async def get_key_status() -> dict[str, Any]:
+    apply_saved_keys_to_environ(overwrite=True)
     keys = load_keys()
-    apply_saved_keys_to_environ()
     return {
-        "openai": bool(
-            keys.get("GPT_TOKENISH")
-            or keys.get("OPENAI_API_KEY")
-            or os.getenv("GPT_TOKENISH")
-            or os.getenv("OPENAI_API_KEY")
-        ),
-        "gemini": bool(
-            keys.get("GEMINI_API_KEY")
-            or keys.get("GOOGLE_API_KEY")
-            or os.getenv("GEMINI_API_KEY")
-            or os.getenv("GOOGLE_API_KEY")
-        ),
+        "gemini": bool(keys.get("GEMINI_API_KEY") or keys.get("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")),
         "openrouter": bool(keys.get("OPENROUTER_API_KEY") or os.getenv("OPENROUTER_API_KEY")),
-        "anthropic": bool(keys.get("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")),
         "home": str(tokenish_home()),
         "version": __version__,
     }
 
 
 @app.post("/settings/keys")
-async def set_keys(payload: KeysPayload) -> dict[str, Any]:
-    data = {k: v for k, v in payload.model_dump().items() if v}
+async def set_keys(payload: KeysPayload):
+    data = {k: v for k, v in payload.model_dump().items() if v and str(v).strip()}
+    allowed = {
+        "GEMINI_API_KEY",
+        "GOOGLE_API_KEY",
+        "OPENROUTER_API_KEY",
+    }
+    data = {k: str(v).strip() for k, v in data.items() if k in allowed}
+    if not data:
+        return JSONResponse({"ok": False, "error": "paste a Gemini or OpenRouter key"}, status_code=400)
     save_keys(data)
     for key, value in data.items():
         os.environ[key] = value
-    return {"ok": True, "home": str(tokenish_home())}
+    try:
+        routing_path = Path(__file__).resolve().parent / "routing.json"
+        routing = json.loads(routing_path.read_text(encoding="utf-8"))
+        providers = routing.setdefault("providers", {})
+        if data.get("GEMINI_API_KEY") or data.get("GOOGLE_API_KEY"):
+            providers.setdefault("gemini", {})["is_active"] = True
+            providers["gemini"].pop("error", None)
+        if data.get("OPENROUTER_API_KEY"):
+            providers.setdefault("openrouter", {})["is_active"] = True
+            providers["openrouter"].pop("error", None)
+        routing_path.write_text(json.dumps(routing, indent=2) + "\n", encoding="utf-8")
+    except Exception:
+        pass
+    return {"ok": True, "home": str(tokenish_home()), "saved": list(data.keys())}
 
 
 @app.get("/providers")

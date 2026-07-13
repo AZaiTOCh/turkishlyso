@@ -12,21 +12,28 @@
     <aside class="sidebar">
       <div class="brand">
         <h1>tokenish</h1>
-        <span>token use optimizer</span>
+        <span>token use optimizer · v0.2</span>
       </div>
       <div class="section-label">provider</div>
       <select id="provider">
         <option value="auto">auto</option>
-                <option value="openai">openai</option>
-        <option value="anthropic">anthropic</option>
-        <option value="groq">groq</option>
         <option value="gemini">gemini</option>
         <option value="openrouter">openrouter</option>
-        <option value="perplexity">perplexity</option>
+        <option value="groq">groq</option>
       </select>
       <div class="section-label">model</div>
-      <input id="model" list="models" value="gemini-3.5-flash" placeholder="model id" />
-      <datalist id="models"></datalist>
+      <select id="model">
+        <option value="gemini-3.5-flash">gemini-3.5-flash</option>
+        <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+        <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+        <option value="openrouter/free">openrouter/free</option>
+      </select>
+      <div class="section-label">API keys</div>
+      <label class="tiny">Gemini</label>
+      <input id="sideKeyGemini" type="password" placeholder="GEMINI_API_KEY" autocomplete="off" />
+      <label class="tiny">OpenRouter</label>
+      <input id="sideKeyOpenRouter" type="password" placeholder="OPENROUTER_API_KEY" autocomplete="off" />
+      <button class="btn" id="sideKeySave" type="button">save keys</button>
       <div class="section-label">status</div>
       <div class="provider-list" id="providers"></div>
       <div class="section-label">pdf page range</div>
@@ -60,20 +67,18 @@
   <div id="keyModal" class="modal" hidden>
     <div class="modal-card">
       <h2>set up API keys</h2>
-      <p>Paste at least one key to start. Saved under <code>~/.tokenish</code>.</p>
+      <p>Paste Gemini and/or OpenRouter. Saved under <code>~/.tokenish</code>.</p>
       <label>Gemini API key</label>
       <input id="keyGemini" type="password" placeholder="GEMINI_API_KEY" autocomplete="off" />
-      <label>OpenAI / ChatGPT key</label>
-      <input id="keyOpenAI" type="password" placeholder="GPT_TOKENISH / OPENAI_API_KEY" autocomplete="off" />
       <label>OpenRouter key (optional)</label>
       <input id="keyOpenRouter" type="password" placeholder="OPENROUTER_API_KEY" autocomplete="off" />
+      <div id="keyModalMsg" class="error" hidden></div>
       <div class="modal-actions">
-        <button class="btn" id="keySkip">skip for now</button>
-        <button class="btn primary" id="keySave">save & continue</button>
+        <button class="btn" id="keySkip" type="button">skip for now</button>
+        <button class="btn primary" id="keySave" type="button">save & continue</button>
       </div>
     </div>
   </div>
   <script src="/ui/app.js"></script>
 </body>
 </html>
-

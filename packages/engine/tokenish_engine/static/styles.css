@@ -150,6 +150,10 @@ textarea {
   border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: #fff;
 }
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+.tiny { font-size: 0.75rem; color: var(--muted); }
+aside input[type="password"], aside select#model {
+  width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 8px; background: #fff;
+}
 @media (max-width: 860px) {
   .app { grid-template-columns: 1fr; }
   .sidebar { display: none; }

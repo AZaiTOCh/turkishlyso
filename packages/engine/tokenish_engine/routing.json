@@ -1,84 +1,46 @@
 {
-  "routing_engine_version": "1.1.0",
+  "routing_engine_version": "1.2.0",
   "tasks": {
     "chat": {
       "preferred_provider": "auto",
       "fallbacks": [
-        "openai/gpt-4o",
-        "gemini/gemini-3.5-flash"
+        "gemini/gemini-3.5-flash",
+        "gemini/gemini-2.5-flash",
+        "gemini/gemini-2.0-flash",
+        "openrouter/openrouter/free"
       ]
     }
   },
   "openrouter_free_roster": {
     "verified_active": [
-      "tencent/hy3:free",
-      "poolside/laguna-xs-2.1:free",
-      "cohere/north-mini-code:free",
-      "nvidia/nemotron-3.5-content-safety:free",
-      "nvidia/nemotron-3-ultra-550b-a55b:free",
-      "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-      "poolside/laguna-m.1:free",
-      "google/gemma-4-26b-a4b-it:free",
-      "google/gemma-4-31b-it:free",
-      "google/lyria-3-pro-preview",
-      "google/lyria-3-clip-preview",
-      "nvidia/nemotron-3-super-120b-a12b:free",
       "openrouter/free",
-      "liquid/lfm-2.5-1.2b-thinking:free",
-      "liquid/lfm-2.5-1.2b-instruct:free",
-      "nvidia/nemotron-3-nano-30b-a3b:free",
-      "nvidia/nemotron-nano-12b-v2-vl:free",
-      "qwen/qwen3-next-80b-a3b-instruct:free",
-      "nvidia/nemotron-nano-9b-v2:free",
-      "openai/gpt-oss-120b:free",
-      "openai/gpt-oss-20b:free",
-      "qwen/qwen3-coder:free",
-      "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+      "google/gemma-4-31b-it:free",
       "meta-llama/llama-3.3-70b-instruct:free",
-      "meta-llama/llama-3.2-3b-instruct:free",
-      "nousresearch/hermes-3-llama-3.1-405b:free"
+      "qwen/qwen3-coder:free"
     ],
-    "last_verified": "2026-07-13T08:27:19Z",
-    "last_test_called": "2026-07-13T07:46:53Z"
+    "last_verified": "2026-07-13T15:16:41Z"
   },
   "providers": {
-    "openai": {
-      "is_active": false,
-      "model_name": "gpt-4o",
-      "latency_ms": 281,
-      "error": "quota exceeded - add billing or use fallback"
-    },
     "gemini": {
       "is_active": true,
       "models": [
         "gemini-3.5-flash",
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
         "gemini-3.1-pro-preview"
       ],
-      "last_ping": "2026-07-13T07:46:50Z",
-      "model_name": "gemini-3.5-flash",
-      "latency_ms": 6886
+      "model_name": "gemini-3.5-flash"
     },
     "openrouter": {
-      "is_active": false,
+      "is_active": true,
       "models": [
         "openrouter/free"
-      ],
-      "error": "HTTP 402: requires more credits"
-    },
-    "perplexity": {
-      "is_active": false,
-      "models": [
-        "sonar",
-        "sonar-pro"
       ]
     },
-    "anthropic": {
+    "groq": {
       "is_active": false,
-      "models": [
-        "claude-sonnet-4-20250514",
-        "claude-3-5-haiku-latest"
-      ]
+      "models": []
     }
   },
-  "last_updated": "2026-07-13T08:27:19Z"
+  "last_updated": "2026-07-13T15:30:00Z"
 }

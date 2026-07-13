@@ -15,7 +15,13 @@ from typing import Any
 
 import httpx
 
-from tokenish_engine.config import gemini_key, openai_key, settings
+from tokenish_engine.config import gemini_key, openrouter_key, settings
+# openai kept only for optional offline tests; not used in product surface
+try:
+    from tokenish_engine.config import openai_key  # noqa: F401
+except Exception:  # pragma: no cover
+    def openai_key():  # type: ignore
+        return None
 from tokenish_engine.models import ProviderStatus
 
 _ROUTING_PATH = Path(__file__).resolve().parent.parent / "routing.json"
@@ -142,7 +148,7 @@ async def _test_gemini(model: str) -> tuple[bool, int, str]:
 
 
 async def _poll_openrouter_free() -> list[str]:
-    key = settings.openrouter_api_key
+    key = openrouter_key()
     if not key:
         return []
     try:
@@ -166,7 +172,7 @@ async def _poll_openrouter_free() -> list[str]:
 
 
 async def _test_openrouter(model_id: str) -> tuple[bool, int, str]:
-    key = settings.openrouter_api_key
+    key = openrouter_key()
     if not key:
         return False, 0, "OPENROUTER_API_KEY missing"
     t0 = time.time()
@@ -264,24 +270,7 @@ async def run_preflight(*, force: bool = False) -> tuple[list[ProviderStatus], d
     providers_cfg = routing.setdefault("providers", {})
     meta: dict[str, Any] = {"argus": True, "fallback_chain": _fallback_list()}
 
-    # ChatGPT (GPT_TOKENISH)
-    openai_model = settings.openai_primary_model
-    openai_ok = False
-    openai_ms = 0
-    openai_err = ""
-    if openai_key():
-        ok, openai_ms, openai_err = await _test_openai(openai_model)
-        openai_ok = ok
-        if not ok and _is_quota_error(openai_err):
-            openai_err = "quota exceeded - add billing or use fallback"
-        providers_cfg["openai"] = {
-            "is_active": openai_ok,
-            "model_name": openai_model,
-            "latency_ms": openai_ms,
-            "error": openai_err,
-        }
-
-    # Gemini 3.5
+    # Gemini
     gemini_model = settings.gemini_model
     gemini_ok = bool(gemini_key())
     gemini_ms = 0
@@ -292,42 +281,46 @@ async def run_preflight(*, force: bool = False) -> tuple[list[ProviderStatus], d
             gemini_ok = ok
             if not ok and _is_quota_error(gemini_err):
                 gemini_err = "quota exceeded"
+            # 503 high demand is transient — keep provider active for alt-model retries
+            if not ok and "503" in (gemini_err or ""):
+                gemini_ok = True
+                gemini_err = "high demand (will retry alt models)"
             providers_cfg.setdefault("gemini", {})["last_ping"] = _now()
             providers_cfg["gemini"].update(
-                {"is_active": gemini_ok, "model_name": gemini_model, "latency_ms": gemini_ms}
+                {
+                    "is_active": True if gemini_key() else False,
+                    "model_name": gemini_model,
+                    "latency_ms": gemini_ms,
+                    "error": gemini_err or None,
+                }
             )
         else:
             gemini_ms = int(providers_cfg.get("gemini", {}).get("latency_ms", 0))
-            gemini_ok = bool(providers_cfg.get("gemini", {}).get("is_active", True))
+            gemini_ok = bool(gemini_key())
 
     # OpenRouter roster
     or_models = await _refresh_openrouter_roster(routing)
-    or_ok = bool(settings.openrouter_api_key) and bool(or_models)
+    or_ok = bool(openrouter_key()) and bool(or_models)
+    providers_cfg.setdefault("openrouter", {})["is_active"] = or_ok
 
     _save_routing(routing)
     meta["openrouter_free_roster"] = or_models
-    meta["preferred"] = _pick_preferred(openai_ok, gemini_ok, or_ok)
+    meta["preferred"] = _pick_preferred(False, gemini_ok, or_ok)
 
     statuses = [
         ProviderStatus(
-            name="openai",
-            available=openai_ok and bool(openai_key()),
-            detail=(
-                f"{openai_model} OK {openai_ms}ms"
-                if openai_ok and openai_ms
-                else (openai_err or "GPT_TOKENISH missing")
-            ),
-            models=[settings.openai_primary_model, "gpt-4o-mini"],
-        ),
-        ProviderStatus(
             name="gemini",
-            available=gemini_ok and bool(gemini_key()),
+            available=bool(gemini_key()),
             detail=(
                 f"{gemini_model} OK {gemini_ms}ms"
                 if gemini_ok and gemini_ms
-                else (gemini_err or "GEMINI_API_KEY missing")
+                else (gemini_err or ("key set" if gemini_key() else "GEMINI_API_KEY missing"))
             ),
-            models=[settings.gemini_model, settings.gemini_model_fallback],
+            models=[
+                settings.gemini_model,
+                settings.gemini_model_fallback,
+                getattr(settings, "gemini_model_fallback_2", "gemini-2.0-flash"),
+            ],
         ),
         ProviderStatus(
             name="openrouter",
@@ -335,21 +328,9 @@ async def run_preflight(*, force: bool = False) -> tuple[list[ProviderStatus], d
             detail=(
                 f"{len(or_models)} free models"
                 if or_ok
-                else "OPENROUTER_API_KEY missing"
+                else ("OPENROUTER_API_KEY missing" if not openrouter_key() else "no free models")
             ),
-            models=or_models[:6],
-        ),
-        ProviderStatus(
-            name="perplexity",
-            available=bool(settings.perplexity_api_key),
-            detail="key set" if settings.perplexity_api_key else "PERPLEXITY_API_KEY missing",
-            models=[settings.perplexity_model, "sonar-pro"],
-        ),
-        ProviderStatus(
-            name="anthropic",
-            available=bool(settings.anthropic_api_key),
-            detail="key set" if settings.anthropic_api_key else "ANTHROPIC_API_KEY missing",
-            models=["claude-sonnet-4-20250514", "claude-3-5-haiku-latest"],
+            models=(or_models[:8] or [settings.openrouter_free_model]),
         ),
     ]
     _PREFLIGHT_CACHE.update({"at": time.time(), "statuses": statuses, "meta": meta})
@@ -387,16 +368,8 @@ def _fallback_list() -> list[str]:
 
 
 def _pick_preferred(openai_ok: bool, gemini_ok: bool, or_ok: bool) -> dict[str, str]:
-    if openai_ok:
-        return {"provider": "openai", "model": settings.openai_primary_model}
-    if gemini_ok:
+    if gemini_ok or gemini_key():
         return {"provider": "gemini", "model": settings.gemini_model}
-    if or_ok:
+    if or_ok or openrouter_key():
         return {"provider": "openrouter", "model": settings.openrouter_free_model}
-    if openai_key():
-        return {"provider": "openai", "model": settings.openai_primary_model}
-    if gemini_key():
-        return {"provider": "gemini", "model": settings.gemini_model}
-    if settings.openrouter_api_key:
-        return {"provider": "openrouter", "model": settings.openrouter_free_model}
-    return {"provider": "auto", "model": settings.openai_primary_model}
+    return {"provider": "auto", "model": settings.gemini_model}

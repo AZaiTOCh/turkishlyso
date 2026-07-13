@@ -1,20 +1,21 @@
 """
 Provider dispatch + Argus-style fallback chain.
 
-Order when preferred provider fails / missing key:
-  ChatGPT (gpt-4o) → Gemini 3.5 → OpenRouter free roster
+Order: Gemini (primary + alt models) → OpenRouter
+OpenAI / Anthropic removed from the product surface.
 """
 
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, AsyncIterator
 
 import httpx
 
-from tokenish_engine.config import gemini_key, openai_key, settings
+from tokenish_engine.config import gemini_key, groq_key, openrouter_key, settings
 from tokenish_engine.dispatch.argus import run_preflight
 from tokenish_engine.models import ProviderStatus
 
@@ -45,7 +46,6 @@ def _load_fallbacks() -> list[tuple[str, str]]:
     except Exception:
         pass
     return [
-        ("openai", settings.openai_primary_model),
         ("gemini", settings.gemini_model),
         ("openrouter", settings.openrouter_free_model),
     ]
@@ -76,19 +76,17 @@ def resolve_provider(provider: str | None, model: str | None, target_engine: str
     if "openrouter" in blob or ":free" in blob:
         return "openrouter"
     if any(x in blob for x in ("gpt", "openai", "o1", "o3", "o4", "chatgpt")):
-        if _provider_active("openai"):
-            return "openai"
+        # OpenAI removed from UI; map to auto fallback chain.
+        pass
     if "groq" in blob or "llama-3" in blob:
         if _provider_active("groq"):
             return "groq"
     active = _first_active_fallback()
     if active:
         return active[0]
-    if openai_key():
-        return "openai"
     if gemini_key():
         return "gemini"
-    if settings.openrouter_api_key:
+    if openrouter_key():
         return "openrouter"
     return "gemini"
 
@@ -106,17 +104,17 @@ def resolve_model(provider: str, model: str | None, target_engine: str) -> str:
 
 def _provider_has_key(name: str) -> bool:
     if name == "groq":
-        return bool(settings.groq_api_key)
+        return bool(groq_key())
     if name == "gemini":
         return bool(gemini_key())
     if name == "openrouter":
-        return bool(settings.openrouter_api_key)
+        return bool(openrouter_key())
     if name == "perplexity":
-        return bool(settings.perplexity_api_key)
+        return bool(settings.perplexity_api_key or os.environ.get("PERPLEXITY_API_KEY"))
     if name == "openai":
-        return bool(openai_key())
+        return False  # removed from product surface
     if name == "anthropic":
-        return bool(settings.anthropic_api_key)
+        return False  # removed from product surface
     return False
 
 
@@ -182,11 +180,38 @@ def _user_content(envelope: str, image_b64: str | None, image_mime: str | None) 
 
 def _fallback_chain(provider: str, model: str) -> list[tuple[str, str]]:
     chain: list[tuple[str, str]] = [(provider, model)]
+    # Gemini high-demand: try alternate Gemini models before leaving the provider.
+    if provider == "gemini" or model.startswith("gemini"):
+        for alt in (
+            settings.gemini_model,
+            settings.gemini_model_fallback,
+            getattr(settings, "gemini_model_fallback_2", "gemini-2.0-flash"),
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
+        ):
+            if alt and ("gemini", alt) not in chain:
+                chain.append(("gemini", alt))
     for prov, mdl in _load_fallbacks():
         if (prov, mdl) not in chain:
             chain.append((prov, mdl))
-    ready = [(p, m) for p, m in chain if _provider_active(p)]
-    return ready or chain
+    # Always offer OpenRouter as last resort when keyed.
+    if openrouter_key() and ("openrouter", settings.openrouter_free_model) not in chain:
+        chain.append(("openrouter", settings.openrouter_free_model))
+    ready = [(p, m) for p, m in chain if _provider_has_key(p)]
+    # Keep gemini attempts even if routing marked inactive after transient 503.
+    if not ready:
+        ready = [(p, m) for p, m in chain if _provider_has_key(p) or p == "gemini" and gemini_key()]
+    # Prefer keyed providers; allow gemini even when is_active flipped by old errors
+    out: list[tuple[str, str]] = []
+    for p, m in chain:
+        if not _provider_has_key(p):
+            continue
+        if p == "gemini":
+            out.append((p, m))
+            continue
+        if _provider_active(p):
+            out.append((p, m))
+    return out or ready or [(provider, model)]
 
 
 async def chat_complete(
@@ -314,17 +339,13 @@ def _base_url(provider: str) -> str:
 
 def _api_key(provider: str) -> str | None:
     if provider == "groq":
-        return settings.groq_api_key
+        return groq_key()
     if provider == "openrouter":
-        return settings.openrouter_api_key
+        return openrouter_key()
     if provider == "perplexity":
-        return settings.perplexity_api_key
-    if provider == "openai":
-        return openai_key()
+        return settings.perplexity_api_key or os.environ.get("PERPLEXITY_API_KEY")
     if provider == "gemini":
         return gemini_key()
-    if provider == "anthropic":
-        return settings.anthropic_api_key
     return None
 
 
@@ -503,8 +524,23 @@ async def _gemini_chat(
             )
 
     r = await _call(model)
-    if r.status_code == 404 and model != settings.gemini_model_fallback:
-        r = await _call(settings.gemini_model_fallback)
+    # Retry alternate Gemini models on 404 / 503 high demand.
+    alts = [
+        settings.gemini_model_fallback,
+        getattr(settings, "gemini_model_fallback_2", "gemini-2.0-flash"),
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-flash-latest",
+    ]
+    tried = {model}
+    if r.status_code in {404, 429, 503}:
+        for alt in alts:
+            if not alt or alt in tried:
+                continue
+            tried.add(alt)
+            r = await _call(alt)
+            if r.status_code < 400:
+                break
     if r.status_code >= 400:
         raise RuntimeError(f"gemini HTTP {r.status_code}: {r.text[:240]}")
     data = r.json()

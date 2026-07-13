@@ -24,7 +24,7 @@ def load_keys() -> dict[str, str]:
         data = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return {}
-    return {k: str(v) for k, v in (data.get("keys") or {}).items() if v}
+    return {k: str(v).strip() for k, v in (data.get("keys") or {}).items() if str(v).strip()}
 
 
 def save_keys(keys: dict[str, str]) -> Path:
@@ -39,6 +39,7 @@ def save_keys(keys: dict[str, str]) -> Path:
             existing = {}
     merged = dict(existing.get("keys") or {})
     for key, value in keys.items():
+        value = (value or "").strip()
         if value:
             merged[key] = value
     existing["keys"] = merged
@@ -46,9 +47,10 @@ def save_keys(keys: dict[str, str]) -> Path:
     return path
 
 
-def apply_saved_keys_to_environ() -> dict[str, str]:
-    """Load ~/.tokenish keys into os.environ when not already set."""
+def apply_saved_keys_to_environ(*, overwrite: bool = True) -> dict[str, str]:
+    """Load ~/.tokenish keys into os.environ so live requests see them."""
     loaded = load_keys()
     for key, value in loaded.items():
-        os.environ.setdefault(key, value)
+        if overwrite or key not in os.environ or not os.environ.get(key):
+            os.environ[key] = value
     return loaded
