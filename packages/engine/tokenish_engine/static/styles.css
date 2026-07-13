@@ -162,21 +162,19 @@ select, input[type="text"], input[type="password"] {
   min-width: 0;
 }
 .tokex-panel {
-  background: #fafafa;
   border-radius: 12px;
   padding: 0 16px 14px;
-  font-family: "IBM Plex Mono", monospace;
+  font-family: "Arimo", "IBM Plex Sans", system-ui, sans-serif;
   min-width: 0;
-  border: 1px solid var(--border);
   overflow: visible;
 }
 .tokex-panel.lifetime {
   border: 1.5px solid #16a34a;
-  background: #f7fdf9;
+  background: #dcfce7;
 }
 .tokex-panel.chat {
   border: 1.5px solid #dc2626;
-  background: #fff8f8;
+  background: #fee2e2;
 }
 .tokex-head {
   display: flex;
@@ -184,26 +182,28 @@ select, input[type="text"], input[type="password"] {
   justify-content: space-between;
   gap: 8px;
   margin: 0 -16px 8px;
-  padding: 10px 16px;
+  padding: 12px 16px;
   border-radius: 11px 11px 0 0;
 }
 .tokex-panel.lifetime .tokex-head {
-  background: #e8f8ee;
+  background: #bbf7d0;
   border-bottom: 1.5px solid #16a34a;
 }
 .tokex-panel.chat .tokex-head {
-  background: #fdecec;
+  background: #fecaca;
   border-bottom: 1.5px solid #dc2626;
 }
 .tokex-label {
-  font-size: 0.78rem;
-  letter-spacing: 0.28em;
+  font-family: "Arimo", system-ui, sans-serif;
+  font-size: 1.05rem;
+  letter-spacing: 0.32em;
   text-transform: uppercase;
   font-weight: 700;
   flex: 1;
+  line-height: 1.2;
 }
-.tokex-panel.lifetime .tokex-label { color: #15803d; }
-.tokex-panel.chat .tokex-label { color: #b91c1c; }
+.tokex-panel.lifetime .tokex-label { color: #14532d; }
+.tokex-panel.chat .tokex-label { color: #7f1d1d; }
 .tokex-details-wrap { position: relative; flex-shrink: 0; }
 .tokex-details-menu {
   display: none;
@@ -219,12 +219,42 @@ select, input[type="text"], input[type="password"] {
   border-radius: 10px;
   box-shadow: 0 10px 28px rgba(24, 24, 27, 0.14);
   padding: 10px 12px;
+  font-family: "IBM Plex Mono", monospace;
 }
 .tokex-details-menu.open { display: block; }
-.tokex-big { font-size: 1.35rem; font-weight: 600; color: #18181b; margin: 4px 0 2px; }
-.tokex-sub { color: #71717a; font-size: 0.72rem; letter-spacing: 0.04em; margin-bottom: 8px; }
-.tokex-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; font-size: 0.82rem; color: #18181b; }
-.tokex-grid .k { display: block; color: #71717a; font-size: 0.68rem; letter-spacing: 0.06em; margin-bottom: 2px; }
+.tokex-big {
+  font-family: "Arimo", system-ui, sans-serif;
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: #18181b;
+  margin: 4px 0 2px;
+}
+.tokex-panel.lifetime .tokex-big { color: #14532d; }
+.tokex-panel.chat .tokex-big { color: #7f1d1d; }
+.tokex-sub {
+  font-family: "Arimo", system-ui, sans-serif;
+  color: #3f3f46;
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  margin-bottom: 8px;
+}
+.tokex-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  font-size: 0.9rem;
+  color: #18181b;
+  font-family: "Arimo", system-ui, sans-serif;
+}
+.tokex-grid .k {
+  display: block;
+  color: #52525b;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+  font-weight: 600;
+}
 .tokex-meta, .tokex-sends { color: #52525b; font-size: 0.72rem; line-height: 1.45; }
 .tokex-meta { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
 .tokex-sends { display: flex; flex-direction: column; gap: 3px; }
