@@ -1,8 +1,8 @@
 """
 Mumblz — History title agent.
 
-Reads a full dialog, picks three words that stay clearest after vowel removal,
-then applies the Mumblz mumble (strip vowels) for the History label.
+Reads a full dialog and picks the two most suitable Title Case words
+for the History label (no vowel stripping).
 """
 
 from __future__ import annotations
@@ -29,11 +29,9 @@ _STOP = {
     "final", "generate", "generated", "provide", "provided", "deeply", "whole",
     "check", "checked", "online", "sources", "source", "trusted", "relevant",
     "everything", "something", "anything", "page", "pages", "part", "parts",
-    "color", "colour", "colors", "colours",  # prefer Palette / Chromatic
-    "brief", "neon",  # mumble poorly (Brf / Nn) — prefer clearer aliases
+    "color", "colour", "colors", "colours",
 }
 
-# Labels chosen because consonant skeletons stay readable (Cmbntrcs, Bnchmrk, …)
 _TOPIC_MAP: list[tuple[re.Pattern[str], str, int]] = [
     (re.compile(r"unicombinator|freefactorial|freesar|superfreefactorial|g[- ]?triangle", re.I), "Combinatorics", 12),
     (re.compile(r"\bgveb\b|waldo|raphael|bosch|visual exhaustion|grounded visual", re.I), "Benchmark", 12),
@@ -60,8 +58,7 @@ _TASK_MAP: list[tuple[re.Pattern[str], str, int]] = [
     (re.compile(r"compare|contrast", re.I), "Contrast", 6),
 ]
 
-# Prefer these when semantics collide — strong consonant frames
-_MUMBLE_FRIENDLY_DEFAULTS = [
+_DEFAULT_WORDS = [
     "Scrutiny", "Digest", "Breakdown", "Synthesis", "Contrast",
     "Framework", "Signalcraft", "Threadmark", "Spotlight", "Blueprint",
 ]
@@ -73,67 +70,31 @@ _STYLE_WORDS = {
     "framework", "benchmark", "cityscape", "animation",
 }
 
-_VOWELS = set("aeiouAEIOU")
+_TITLE_WORDS = 2
 
 
 def strip_vowels_word(word: str) -> str:
-    """Mumblz mumble: drop vowels; keep at least one character."""
-    if not word:
-        return word
-    parts = word.split("-") if "-" in word else [word]
-    out: list[str] = []
-    for part in parts:
-        core = "".join(c for c in part if c not in _VOWELS)
-        if not core:
-            core = part[:1]
-        out.append(core[0].upper() + core[1:] if core else core)
-    return "-".join(out)
+    """Deprecated no-op kept for import compatibility — returns title-cased word."""
+    return _title_case(re.sub(r"[^A-Za-z0-9-]", "", word or "")) or (word or "")
 
 
 def mumblz_title(title: str) -> str:
-    """Apply vowel stripping to each word of a 3-word title."""
+    """Normalize to at most two Title Case words (no vowel stripping)."""
     parts = [p for p in re.split(r"\s+", (title or "").strip()) if p]
     if not parts:
-        return "Frsh Tkn Thrd"
-    return " ".join(strip_vowels_word(p) for p in parts[:3])
-
-
-def mumble_clarity(word: str) -> float:
-    """
-    How readable is this word after vowel removal?
-    Mumblz prefers long, varied consonant skeletons (Cmbntrcs) over stubs (Nn, Brf).
-    """
-    raw = re.sub(r"[^A-Za-z0-9-]", "", word or "")
-    if not raw:
-        return 0.0
-    stub = strip_vowels_word(raw)
-    n = len(stub.replace("-", ""))
-    if n <= 1:
-        return 0.05
-    if n == 2:
-        return 0.35
-    if n == 3:
-        score = 1.1
-    else:
-        score = 1.4 + (n - 3) * 0.55
-    # Distinct consonant letters help recognition
-    score += len(set(stub.lower().replace("-", ""))) * 0.35
-    # Prefer stub that still starts like the original word
-    if stub and raw and stub[0].lower() == raw[0].lower():
-        score += 0.6
-    # Soft penalty for very vowel-heavy originals that collapse hard
-    vowel_ratio = sum(1 for c in raw if c in _VOWELS) / max(1, len(raw))
-    if vowel_ratio > 0.45:
-        score *= 0.75
-    return score
+        return "Fresh Thread"
+    return " ".join(_title_case(p) for p in parts[:_TITLE_WORDS])
 
 
 def _title_case(word: str) -> str:
     if not word:
         return word
-    if word.isupper() and len(word) <= 4:
+    cleaned = re.sub(r"[^A-Za-z0-9-]", "", word)
+    if not cleaned:
         return word
-    return word[:1].upper() + word[1:].lower()
+    if cleaned.isupper() and len(cleaned) <= 4:
+        return cleaned
+    return cleaned[:1].upper() + cleaned[1:].lower()
 
 
 def _words(text: str) -> list[str]:
@@ -184,14 +145,11 @@ def _keyword_pool(blob: str) -> list[tuple[str, float]]:
 
 
 def _candidate_pool(blob: str) -> list[tuple[str, float]]:
-    """(clear_word, semantic_score) — Mumblz will re-rank by mumble clarity."""
     pool: dict[str, float] = {}
 
     def add(word: str, sem: float) -> None:
-        tw = _title_case(re.sub(r"[^A-Za-z0-9-]", "", word))
-        if not tw or tw.lower() in _STOP:
-            return
-        if mumble_clarity(tw) < 0.9:  # reject unreadable stubs early
+        tw = _title_case(word)
+        if not tw or tw.lower() in _STOP or len(tw) < 3:
             return
         pool[tw] = max(pool.get(tw, 0.0), sem)
 
@@ -201,96 +159,85 @@ def _candidate_pool(blob: str) -> list[tuple[str, float]]:
         add(label, sem + 7)
     for word, sem in _keyword_pool(blob):
         add(word, sem)
-    for i, word in enumerate(_MUMBLE_FRIENDLY_DEFAULTS):
+    for i, word in enumerate(_DEFAULT_WORDS):
         add(word, 3.5 - i * 0.15)
     return list(pool.items())
 
 
-def _rank_for_mumble(candidates: list[tuple[str, float]]) -> list[tuple[str, float]]:
-    ranked: list[tuple[str, float]] = []
-    for word, sem in candidates:
-        clarity = mumble_clarity(word)
-        # Clarity matters, but dialog-matched topics/tasks still win.
-        total = clarity * 1.55 + sem * 1.15
-        ranked.append((word, total))
-    ranked.sort(key=lambda x: -x[1])
+def _rank_candidates(candidates: list[tuple[str, float]]) -> list[tuple[str, float]]:
+    ranked = sorted(candidates, key=lambda x: -x[1])
     return ranked
 
 
-def _three_word_clear(messages: list[dict[str, str]]) -> str:
-    """Pick three clear words optimized for post-mumble readability."""
+def _two_word_clear(messages: list[dict[str, str]]) -> str:
+    """Pick the two most suitable Title Case words for this dialog."""
     blob = _dialog_blob(messages)
     if not blob.strip():
-        return "Fresh Token Thread"
+        return "Fresh Thread"
 
-    ranked = _rank_for_mumble(_candidate_pool(blob))
+    ranked = _rank_candidates(_candidate_pool(blob))
     picked: list[str] = []
-    used_stubs: set[str] = set()
 
     for word, _score in ranked:
-        stub = strip_vowels_word(word).lower()
-        if stub in used_stubs:
-            continue
         if word.lower() in {w.lower() for w in picked}:
             continue
-        # Skip near-duplicate stubs (Frsh / Frshx)
-        if any(stub.startswith(u[:3]) and u.startswith(stub[:3]) for u in used_stubs if len(u) >= 3):
+        # Skip near-duplicate stems (Assess / Assessment)
+        stem = word.lower()[:5]
+        if any(w.lower()[:5] == stem for w in picked):
             continue
         picked.append(word)
-        used_stubs.add(stub)
-        if len(picked) >= 3:
+        if len(picked) >= _TITLE_WORDS:
             break
 
-    while len(picked) < 3:
-        for fallback in _MUMBLE_FRIENDLY_DEFAULTS:
+    while len(picked) < _TITLE_WORDS:
+        for fallback in _DEFAULT_WORDS:
             if fallback.lower() not in {w.lower() for w in picked}:
                 picked.append(fallback)
                 break
         else:
-            picked.append(["Signalcraft", "Blueprint", "Threadmark"][len(picked) % 3])
+            picked.append(["Signalcraft", "Blueprint"][len(picked) % 2])
 
-    return " ".join(picked[:3])
+    return " ".join(picked[:_TITLE_WORDS])
 
 
-def normalize_three_word_title(raw: str, fallback: str = "Fresh Token Thread") -> str:
+def normalize_three_word_title(raw: str, fallback: str = "Fresh Thread") -> str:
+    """Normalize an LLM/local title to two Title Case words (name kept for API compat)."""
     cleaned = re.sub(r"[\"'`#*_]+", "", (raw or "").strip())
     cleaned = re.sub(r"\s+", " ", cleaned)
     cleaned = cleaned.split("\n", 1)[0].strip()
     parts = [p for p in re.split(r"\s+", cleaned) if p]
-    if len(parts) >= 3:
-        # Re-pick among LLM words by mumble clarity when possible
-        ranked = _rank_for_mumble([(_title_case(p), 5.0) for p in parts[:8]])
-        clear = " ".join(w for w, _ in ranked[:3])
-        if len(clear.split()) < 3:
-            clear = " ".join(_title_case(p) for p in parts[:3])
-    elif len(parts) == 2:
-        clear = f"{_title_case(parts[0])} {_title_case(parts[1])} Digest"
+    if len(parts) >= _TITLE_WORDS:
+        ranked = _rank_candidates([(_title_case(p), 5.0 + (len(parts) - i) * 0.1) for i, p in enumerate(parts[:8])])
+        clear = " ".join(w for w, _ in ranked[:_TITLE_WORDS])
+        if len(clear.split()) < _TITLE_WORDS:
+            clear = " ".join(_title_case(p) for p in parts[:_TITLE_WORDS])
     elif len(parts) == 1:
-        clear = f"{_title_case(parts[0])} Token Digest"
+        clear = f"{_title_case(parts[0])} Digest"
     else:
         clear = fallback
     return mumblz_title(clear)
 
 
+normalize_two_word_title = normalize_three_word_title
+
+
 def mumblz_name_thread(messages: list[dict[str, str]]) -> str:
-    """Mumblz: dialog → clarity-aware 3-word title → vowel-stripped label."""
-    return mumblz_title(_three_word_clear(messages))
+    """Mumblz: dialog → two most suitable Title Case words."""
+    return mumblz_title(_two_word_clear(messages))
 
 
 interpret_thread_title = mumblz_name_thread
 
 
 async def mumblz_name_thread_llm(messages: list[dict[str, str]]) -> str | None:
-    """Optional LLM polish with Mumblz clarity constraint, then vowel strip."""
-    local_clear = _three_word_clear(messages)
+    """Optional LLM polish: reply with two Title Case words."""
+    local_clear = _two_word_clear(messages)
     blob = _dialog_blob(messages)
     if len(blob) < 40:
         return mumblz_title(local_clear)
     prompt = (
-        "Read this chat and reply with ONLY three Title Case words for a history title.\n"
-        "CRITICAL: choose words that stay readable AFTER all vowels (a,e,i,o,u) are removed.\n"
-        "Prefer long consonant-rich words (Combinatorics→Cmbntrcs, Critique→Crtq, Benchmark→Bnchmrk).\n"
-        "Avoid short vowel-heavy words (Neon, Brief, Color, Idea).\n"
+        "Read this chat and reply with ONLY two Title Case words for a history title.\n"
+        "Pick the two most suitable, specific words that capture the topic and task.\n"
         "No quotes, punctuation, or explanation.\n\n"
         f"CHAT:\n{blob[:3500]}\n\n"
         f"Local Mumblz draft (improve if needed): {local_clear}"
@@ -306,7 +253,7 @@ async def mumblz_name_thread_llm(messages: list[dict[str, str]]) -> str | None:
             envelope=prompt,
             history=[],
         )
-        return normalize_three_word_title(text, fallback=local_clear)
+        return normalize_two_word_title(text, fallback=local_clear)
     except Exception:
         return None
 

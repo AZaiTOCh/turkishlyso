@@ -1,22 +1,15 @@
 """Mumblz title agent tests."""
 
-from tokenish_engine.agents import mumblz_name_thread, mumblz_title, strip_vowels_word
-from tokenish_engine.agents.mumblz import mumble_clarity
+from tokenish_engine.agents import mumblz_name_thread, mumblz_title
 
 
-def test_mumblz_strips_vowels():
-    assert strip_vowels_word("Combinatorics") == "Cmbntrcs"
-    assert strip_vowels_word("Critique") == "Crtq"
-    assert mumblz_title("Neon Cityscape Review") == "Nn Ctyscp Rvw"
+def test_mumblz_keeps_vowels_two_words():
+    assert mumblz_title("Neon Cityscape Review") == "Neon Cityscape"
+    assert mumblz_title("Combinatorics Critique Audit") == "Combinatorics Critique"
+    assert mumblz_title("") == "Fresh Thread"
 
 
-def test_clarity_prefers_consonant_rich_words():
-    assert mumble_clarity("Combinatorics") > mumble_clarity("Neon")
-    assert mumble_clarity("Critique") > mumble_clarity("Brief")
-    assert mumble_clarity("Benchmark") > mumble_clarity("Idea")
-
-
-def test_mumblz_avoids_unreadable_stubs():
+def test_mumblz_two_words_combinatorics_chat():
     msgs = [
         {
             "role": "user",
@@ -36,17 +29,14 @@ def test_mumblz_avoids_unreadable_stubs():
     ]
     title = mumblz_name_thread(msgs)
     parts = title.split()
-    assert len(parts) == 3
-    # Every mumbled word should keep a usable consonant frame
-    assert all(len(p) >= 3 for p in parts)
-    joined = " ".join(parts).lower()
-    assert "a" not in joined and "e" not in joined and "i" not in joined
-    assert "o" not in joined and "u" not in joined
-    # Should not collapse to tiny stubs like Nn / Brf
-    assert "Nn" not in parts and "Brf" not in parts
+    assert len(parts) == 2
+    # Vowels kept — readable English words
+    assert any(c in title.lower() for c in "aeiou")
+    joined = title.lower()
+    assert "combinatorics" in joined or "critique" in joined or "digest" in joined
 
 
-def test_mumblz_three_words_palette_chat():
+def test_mumblz_two_words_palette_chat():
     msgs = [
         {"role": "user", "content": "Deeply Assess the attached. I want color and details of ratios and styles."},
         {
@@ -56,5 +46,5 @@ def test_mumblz_three_words_palette_chat():
     ]
     title = mumblz_name_thread(msgs)
     parts = title.split()
-    assert len(parts) == 3
-    assert all(len(p) >= 3 for p in parts)
+    assert len(parts) == 2
+    assert any(c in title.lower() for c in "aeiou")

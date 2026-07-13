@@ -1,4 +1,4 @@
-"""Mumblz — History title agent (3-word titles, then vowel-stripped)."""
+"""Mumblz — History title agent (two most suitable words, no vowel stripping)."""
 
 from tokenish_engine.agents.mumblz import (
     interpret_thread_title,
@@ -7,6 +7,7 @@ from tokenish_engine.agents.mumblz import (
     mumblz_name_thread_llm,
     mumblz_title,
     normalize_three_word_title,
+    normalize_two_word_title,
     strip_vowels_word,
 )
 
@@ -16,6 +17,7 @@ __all__ = [
     "mumblz_title",
     "strip_vowels_word",
     "normalize_three_word_title",
+    "normalize_two_word_title",
     "interpret_thread_title",
     "interpret_thread_title_llm",
 ]

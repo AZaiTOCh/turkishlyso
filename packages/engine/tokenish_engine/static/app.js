@@ -9,7 +9,7 @@ const providerSelect = document.getElementById("provider");
 const threadListEl = document.getElementById("threadList");
 
 const STORE_KEY = "tokenish.threads.v2";
-const MUMBLZ_REV = "clarity-v2";
+const MUMBLZ_REV = "two-word-v1";
 const WELCOME = "Attach a pdf, docx, xlsx, csv, or image. tokenish optimizes every send automatically.";
 
 const DEFAULT_MODELS = [
@@ -241,54 +241,28 @@ function titleCaseWord(w) {
   return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
 }
 
-/** Mumblz: strip vowels from a word (keep ≥1 char). */
-function mumblzWord(word) {
-  const parts = String(word || "").split("-");
-  return parts
-    .map((part) => {
-      let core = part.replace(/[aeiouAEIOU]/g, "");
-      if (!core) core = part.slice(0, 1);
-      return core ? core.charAt(0).toUpperCase() + core.slice(1) : core;
-    })
-    .join("-");
-}
-
+/** Mumblz: normalize to two Title Case words (no vowel stripping). */
 function mumblzTitle(title) {
   const parts = String(title || "").trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return "Frsh Tkn Thrd";
-  return parts.slice(0, 3).map(mumblzWord).join(" ");
+  if (!parts.length) return "Fresh Thread";
+  return parts.slice(0, 2).map(titleCaseWord).join(" ");
 }
 
-function mumbleClarity(word) {
-  const raw = String(word || "").replace(/[^A-Za-z0-9-]/g, "");
-  if (!raw) return 0;
-  const stub = mumblzWord(raw).replace(/-/g, "");
-  const n = stub.length;
-  if (n <= 1) return 0.05;
-  if (n === 2) return 0.35;
-  let score = n === 3 ? 1.1 : 1.4 + (n - 3) * 0.55;
-  score += new Set(stub.toLowerCase()).size * 0.35;
-  if (stub[0] && raw[0] && stub[0].toLowerCase() === raw[0].toLowerCase()) score += 0.6;
-  const vowels = (raw.match(/[aeiouAEIOU]/g) || []).length;
-  if (vowels / raw.length > 0.45) score *= 0.75;
-  return score;
-}
-
-/** Mumblz local title: pick words that stay clear after vowel strip. */
+/** Mumblz local title: two most suitable words from the dialog. */
 function interpretTitleLocal(messages) {
   const stop = new Set([
     "the","a","an","and","or","to","of","in","on","for","with","as","by","at","from",
     "is","are","was","be","this","that","it","i","you","we","my","your","please","want",
     "need","deeply","attached","attachment","document","file","pdf","image","images",
     "then","generate","check","online","sources","everything","page","one","two","three",
-    "color","colour","brief","neon",
+    "color","colour",
   ]);
   const blob = (messages || [])
     .filter((m) => m && (m.role === "user" || m.role === "assistant"))
     .map((m) => String(m.content || ""))
     .join("\n")
     .slice(0, 5000);
-  if (!blob.trim()) return mumblzTitle("Fresh Token Thread");
+  if (!blob.trim()) return mumblzTitle("Fresh Thread");
 
   const rules = [
     [/unicombinator|freefactorial|freesar|g[- ]?triangle/i, "Combinatorics", 12],
@@ -318,8 +292,7 @@ function interpretTitleLocal(messages) {
   const pool = new Map();
   const add = (word, sem) => {
     const t = titleCaseWord(String(word || "").replace(/[^A-Za-z0-9-]/g, ""));
-    if (!t || stop.has(t.toLowerCase())) return;
-    if (mumbleClarity(t) < 0.9) return;
+    if (!t || t.length < 3 || stop.has(t.toLowerCase())) return;
     pool.set(t, Math.max(pool.get(t) || 0, sem));
   };
 
@@ -337,36 +310,31 @@ function interpretTitleLocal(messages) {
   for (const [w, n] of Object.entries(counts)) add(w, n + 2);
   friendly.forEach((w, i) => add(w, 3.5 - i * 0.15));
 
-  const ranked = [...pool.entries()]
-    .map(([word, sem]) => [word, mumbleClarity(word) * 1.55 + sem * 1.15])
-    .sort((a, b) => b[1] - a[1]);
+  const ranked = [...pool.entries()].sort((a, b) => b[1] - a[1]);
 
   const picked = [];
-  const stubs = new Set();
   for (const [word] of ranked) {
-    const stub = mumblzWord(word).toLowerCase();
-    if (stubs.has(stub)) continue;
     if (picked.some((p) => p.toLowerCase() === word.toLowerCase())) continue;
+    if (picked.some((p) => p.toLowerCase().slice(0, 5) === word.toLowerCase().slice(0, 5))) continue;
     picked.push(word);
-    stubs.add(stub);
-    if (picked.length >= 3) break;
+    if (picked.length >= 2) break;
   }
-  while (picked.length < 3) {
+  while (picked.length < 2) {
     const fb = friendly.find((w) => !picked.some((p) => p.toLowerCase() === w.toLowerCase()));
-    picked.push(fb || ["Signalcraft", "Blueprint", "Threadmark"][picked.length]);
+    picked.push(fb || ["Signalcraft", "Blueprint"][picked.length]);
   }
-  return mumblzTitle(picked.slice(0, 3).join(" "));
+  return mumblzTitle(picked.slice(0, 2).join(" "));
 }
 
 function looksProvisionalTitle(title) {
   const t = String(title || "").trim();
-  if (!t || t === "New chat" || t === "Fresh Token Thread" || t === "Frsh Tkn Thrd") return true;
+  if (!t || t === "New chat" || t === "Fresh Token Thread" || t === "Fresh Thread" || t === "Frsh Tkn Thrd") return true;
   if (t.includes("…") || t.includes("...")) return true;
   if (t.length > 36) return true;
   const parts = t.split(/\s+/).filter(Boolean);
-  if (parts.length !== 3) return true;
-  // Still has vowels → not yet Mumblz'd
-  if (/[aeiouAEIOU]/.test(t)) return true;
+  // Old 3-word or vowel-stripped titles need retitle
+  if (parts.length !== 2) return true;
+  if (!/[aeiouAEIOU]/.test(t)) return true;
   return false;
 }
 
@@ -664,7 +632,7 @@ async function send() {
     renderAttachments();
     renderThreadList();
     saveStore();
-    // Interpreter: instant local 3-word title, then optional LLM polish.
+    // Mumblz: instant local 2-word title, then optional LLM polish.
     await refreshThreadTitle(thread, { useLlm: false });
     refreshThreadTitle(thread, { useLlm: true });
   } catch (e) {
