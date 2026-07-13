@@ -125,10 +125,12 @@ async def chat_endpoint(
 
     if stream:
         async def gen():
+            use_prov = prov
+            use_mdl = mdl
             meta = {
                 "type": "meta",
-                "provider": prov,
-                "model": mdl,
+                "provider": use_prov,
+                "model": use_mdl,
                 "tokex": tokex,
                 "meter": tokex,
                 "stages": compiled.stages,
@@ -151,8 +153,8 @@ async def chat_endpoint(
                 session = StreamSession()
                 routing_sent = False
                 async for delta in chat_stream(
-                    provider=prov,
-                    model=mdl,
+                    provider=use_prov,
+                    model=use_mdl,
                     envelope=compiled.envelope,
                     history=hist,
                     image_b64=compiled.image_b64,
@@ -161,7 +163,7 @@ async def chat_endpoint(
                 ):
                     if session.provider and not routing_sent:
                         routing_sent = True
-                        if session.fallback_used or session.provider != prov:
+                        if session.fallback_used or session.provider != use_prov:
                             yield json.dumps(
                                 {
                                     "type": "routing",
@@ -170,8 +172,8 @@ async def chat_endpoint(
                                     "fallback_used": session.fallback_used,
                                 }
                             ) + "\n"
-                            prov = session.provider
-                            mdl = session.model or mdl
+                            use_prov = session.provider
+                            use_mdl = session.model or use_mdl
                     yield json.dumps({"type": "delta", "text": delta}) + "\n"
                 yield json.dumps({"type": "done"}) + "\n"
             except Exception as exc:
