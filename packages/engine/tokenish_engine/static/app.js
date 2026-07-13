@@ -32,14 +32,19 @@ function renderTokex(t) {
   const run = t ? (t.tokex_this_run ?? t.optimized_tokens ?? 0) : 0;
   const pct = t ? (t.saved_pct ?? 0) : 0;
   const minimal = total > 0 && total < 32 && saved === 0;
+  const overhead = total > 0 && run > total;
   document.getElementById("tokexSaved").textContent = minimal
     ? "Saved Tokens —"
-    : `Saved Tokens ${pct}%`;
+    : overhead
+      ? "Saved Tokens 0%"
+      : `Saved Tokens ${pct}%`;
   document.getElementById("tokexTotal").textContent = Number(total).toLocaleString();
   document.getElementById("tokexRun").textContent = Number(run).toLocaleString();
   document.getElementById("tokexPct").textContent = minimal
     ? "short prompt"
-    : `${Number(saved).toLocaleString()} (${pct}%)`;
+    : overhead
+      ? `+${Number(run - total).toLocaleString()} overhead`
+      : `${Number(saved).toLocaleString()} (${pct}%)`;
 }
 
 function addBubble(role, content, meta = {}) {

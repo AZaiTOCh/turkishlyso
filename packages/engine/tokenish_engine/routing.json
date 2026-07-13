@@ -38,14 +38,14 @@
       "meta-llama/llama-3.2-3b-instruct:free",
       "nousresearch/hermes-3-llama-3.1-405b:free"
     ],
-    "last_verified": "2026-07-13T08:02:34Z",
+    "last_verified": "2026-07-13T08:27:19Z",
     "last_test_called": "2026-07-13T07:46:53Z"
   },
   "providers": {
     "openai": {
       "is_active": false,
       "model_name": "gpt-4o",
-      "latency_ms": 275,
+      "latency_ms": 281,
       "error": "quota exceeded - add billing or use fallback"
     },
     "gemini": {
@@ -80,5 +80,5 @@
       ]
     }
   },
-  "last_updated": "2026-07-13T08:02:34Z"
+  "last_updated": "2026-07-13T08:27:19Z"
 }

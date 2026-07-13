@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     kiosk_mode: bool = False
     moorcheh_api_key: str | None = None
     pxpipe_image_tokens: int = 4761
-    pxpipe_min_text_tokens: int = 6000
+    pxpipe_min_text_tokens: int = 4000
 
     # Dispatch defaults
     openai_primary_model: str = "gpt-4o"

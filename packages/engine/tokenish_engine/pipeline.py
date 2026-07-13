@@ -6,6 +6,8 @@ from tokenish_engine.compile import (
     compress_instructions,
     document_verbatim_in_envelope,
     instruction_follow_envelope,
+    naive_baseline_prompt,
+    pick_cheapest_envelope,
     wants_instruction_following,
 )
 from tokenish_engine.compress import compress_context, maybe_hi0_json_block
@@ -47,6 +49,7 @@ def optimize(
     image_b64 = ingested.image_b64
     image_mime = ingested.image_mime
     data_type = ingested.data_type or "text"
+    original_doc = ingested.raw_text or ""
 
     stripped = raw_doc.strip()
     if raw_doc and (data_type == "json" or stripped.startswith("{") or stripped.startswith("[")):
@@ -55,17 +58,22 @@ def optimize(
             raw_doc = packed
             stages.append("hi0")
 
-    if use_headroom and data_type in {"log", "txt", "csv"} and len(raw_doc) > 4000:
+    has_attachment = bool(raw_doc.strip() or image_b64)
+    follow_mode = wants_instruction_following(prompt, has_attachment and bool(raw_doc.strip()))
+
+    if use_headroom and not follow_mode and data_type in {"log", "txt", "csv", "pdf"} and len(raw_doc) > 4000:
         compressed, applied, stage = compress_context(raw_doc)
         if applied:
             raw_doc = compressed
             stages.append(stage)
 
-    has_attachment = bool(raw_doc.strip() or image_b64)
-    follow_mode = wants_instruction_following(prompt, has_attachment and bool(raw_doc.strip()))
-
-    if use_its and raw_doc and not follow_mode:
-        gated = gate_document(prompt, raw_doc, enabled=True, kiosk_mode=use_kiosk)
+    if use_its and raw_doc:
+        gated = gate_document(
+            prompt,
+            raw_doc,
+            enabled=True,
+            kiosk_mode=use_kiosk if not follow_mode else False,
+        )
         its_meta = {
             "dropped": gated.dropped,
             "kept": gated.kept,
@@ -73,7 +81,7 @@ def optimize(
             "labels": gated.labels,
             "kiosk_blocked": gated.kiosk_blocked,
         }
-        if gated.kiosk_blocked:
+        if gated.kiosk_blocked and not follow_mode:
             kiosk_blocked = True
             raw_doc = ""
             stages.append("its_kiosk_block")
@@ -83,7 +91,8 @@ def optimize(
 
     px_applied = False
     px_surcharge = 0
-    if use_pxpipe and raw_doc and not image_b64 and not kiosk_blocked and not follow_mode:
+    px_pointer = ""
+    if use_pxpipe and raw_doc and not image_b64 and not kiosk_blocked:
         pointer, pb64, pmime, px_applied = maybe_pack(
             raw_doc,
             model=model,
@@ -91,38 +100,13 @@ def optimize(
             enabled=True,
         )
         if px_applied:
-            raw_doc = pointer
+            px_pointer = pointer
             image_b64, image_mime = pb64, pmime
             px_surcharge = settings.pxpipe_image_tokens
             stages.append("pxpipe")
 
-    nodes = compress_instructions(prompt)
+    nodes = compress_instructions(prompt, follow_attachment=follow_mode)
 
-    if follow_mode and raw_doc and not kiosk_blocked:
-        envelope = instruction_follow_envelope(prompt, raw_doc, data_type)
-        stages.append("instruction_follow")
-        baseline = baseline_prompt(prompt, ingested.raw_text or "")
-        tokex = compute_tokex(
-            baseline_text=baseline,
-            optimized_text=envelope,
-            stages=stages,
-            fact_notes=["instruction-follow mode: prompt + verbatim #D"],
-        )
-        return CompileResult(
-            envelope=envelope,
-            nodes=nodes,
-            meter=tokex,
-            tokex=tokex,
-            data_type=data_type,
-            image_b64=image_b64,
-            image_mime=image_mime,
-            stages=stages,
-            pxpipe_applied=False,
-            its=its_meta,
-            kiosk_blocked=kiosk_blocked,
-        )
-
-    # Short prompts with no attachment: skip LCS wrapper (cannot save tokens).
     if not raw_doc and not image_b64 and count_tokens(prompt) < 32:
         envelope = prompt.strip()
         stages.append("passthrough_short")
@@ -154,29 +138,57 @@ def optimize(
             "Kiosk Mode: ITS skill scores fell below threshold. "
             "No low-relevance context was injected."
         )
-    else:
-        envelope = assemble_envelope(
-            nodes,
-            raw_doc,
-            data_type,
-            target_engine=model or target_engine,
-            page_range=page_range,
+    elif raw_doc or image_b64:
+        candidates: list[tuple[str, str]] = []
+        clean = nodes.get("clean_prompt") or prompt.strip()
+
+        if follow_mode:
+            candidates.append(
+                ("instruction_follow", instruction_follow_envelope(prompt, raw_doc, data_type, nodes))
+            )
+
+        candidates.append(
+            (
+                "split_exec",
+                assemble_envelope(
+                    nodes,
+                    raw_doc,
+                    data_type,
+                    target_engine=model or target_engine,
+                    page_range=page_range,
+                ),
+            )
         )
 
-    baseline = baseline_prompt(prompt, ingested.raw_text or "")
-
-    if not px_applied and not kiosk_blocked:
-        clean = nodes.get("clean_prompt") or prompt
         if raw_doc:
-            fallback = (
-                f"{clean}\n\n### DATA_SOURCE_BLOCK [Type: {data_type.upper()}] (#D)\n"
-                f"```text\n{raw_doc}\n```"
+            candidates.append(("bare", f"{prompt.strip()}\n\n{raw_doc}"))
+            candidates.append(
+                (
+                    "minimal",
+                    f"{clean}\n\n#D[{data_type}]\n{raw_doc}",
+                )
             )
-        else:
-            fallback = clean
-        if count_tokens(fallback) < count_tokens(envelope):
-            envelope = fallback
-            stages.append("lcs_fallback_cheaper")
+            candidates.append(
+                (
+                    "naive_block",
+                    f"{clean}\n\n### DATA_SOURCE_BLOCK [Type: {data_type.upper()}] (#D)\n```text\n{raw_doc}\n```",
+                )
+            )
+
+        if px_applied and px_pointer:
+            candidates.append(("pxpipe_pointer", f"{clean}\n\n{px_pointer}"))
+
+        stage_pick, envelope = pick_cheapest_envelope(candidates)
+        stages.append(stage_pick)
+    else:
+        envelope = nodes.get("clean_prompt") or prompt.strip()
+        stages.append("prompt_only")
+
+    baseline = (
+        naive_baseline_prompt(prompt, original_doc)
+        if original_doc
+        else baseline_prompt(prompt, original_doc)
+    )
 
     if not px_applied and not kiosk_blocked and raw_doc:
         if not document_verbatim_in_envelope(envelope, raw_doc):
@@ -188,11 +200,10 @@ def optimize(
         stages=stages,
         pxpipe_image_tokens=px_surcharge,
         fact_notes=[
-            "TOTAL_TOKEX = tokens(raw prompt + raw attachments)",
+            "TOTAL_TOKEX = tokens(naive prompt + raw attachment)",
             "TOKEX_THIS_RUN = tokens(optimized envelope)"
             + (f" + pxpipe_image({px_surcharge})" if px_surcharge else ""),
             "SAVED_TOKEX = max(0, TOTAL_TOKEX - TOKEX_THIS_RUN)",
-            "SAVED_PCT = 100 * SAVED_TOKEX / TOTAL_TOKEX",
         ],
     )
 

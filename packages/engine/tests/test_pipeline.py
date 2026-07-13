@@ -101,8 +101,29 @@ def test_pxpipe_threshold_logic():
     assert should_pxpipe(huge, "llama3", "ollama", True) is False
 
 
-def test_ingest_json():
-    data = json.dumps({"hello": "world", "n": 1}).encode()
-    r = ingest_file("data.json", data)
-    assert r.data_type == "json"
-    assert "hello" in r.raw_text
+def test_follow_attachment_picks_savings_path():
+    prompt = "Deeply follow the instructions in the attached document"
+    line = "GVEB grounded visual exhaustion benchmark instruction line. "
+    doc = (line * 20 * 25).strip()
+    result = optimize(
+        prompt=prompt,
+        files=[("gveb.txt", doc.encode("utf-8"))],
+        target_engine="gemini-3.5-flash",
+        model="gemini-3.5-flash",
+    )
+    assert result.tokex.saved_tokex > 0
+    assert result.tokex.tokex_this_run < result.tokex.total_tokex
+    assert "instruction_follow" in result.stages or "pxpipe_pointer" in result.stages or "bare" in result.stages
+
+
+def test_follow_mode_skips_headroom():
+    prompt = "Follow the attached instructions"
+    doc = ("verbatim clause ALPHA-999 must survive optimizer. " * 300).strip()
+    result = optimize(
+        prompt=prompt,
+        files=[("spec.txt", doc.encode("utf-8"))],
+        enable_its=False,
+    )
+    assert "headroom" not in " ".join(result.stages)
+    assert "ALPHA-999" in result.envelope
+

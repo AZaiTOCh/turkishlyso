@@ -4,6 +4,8 @@ from tokenish_engine.compile.lcs import (
     compress_instructions,
     document_verbatim_in_envelope,
     instruction_follow_envelope,
+    naive_baseline_prompt,
+    pick_cheapest_envelope,
     wants_instruction_following,
 )
 
@@ -13,5 +15,7 @@ __all__ = [
     "compress_instructions",
     "document_verbatim_in_envelope",
     "instruction_follow_envelope",
+    "naive_baseline_prompt",
+    "pick_cheapest_envelope",
     "wants_instruction_following",
 ]

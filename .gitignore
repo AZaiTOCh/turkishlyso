@@ -13,3 +13,6 @@ dist/
 apps/desktop/dist/
 packages/engine/.venv/
 *.log
+
+.worktrees/
+

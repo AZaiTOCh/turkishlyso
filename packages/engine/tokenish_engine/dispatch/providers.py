@@ -479,14 +479,27 @@ async def _gemini_chat(
             f"https://generativelanguage.googleapis.com/v1beta/models/"
             f"{mdl}:generateContent?key={key}"
         )
+        body: dict[str, Any] = {
+            "contents": contents,
+            "generationConfig": {"temperature": 0.2},
+        }
+        if "Execute#D_Only" in envelope or "DoNotRewriteOrSummarize#D" in envelope:
+            body["systemInstruction"] = {
+                "parts": [
+                    {
+                        "text": (
+                            "Execute the attached document (#D) exactly. "
+                            "Do not rewrite, summarize, or reproduce #D. "
+                            "Reply with only what #D instructs you to produce."
+                        )
+                    }
+                ]
+            }
         async with httpx.AsyncClient(timeout=120.0) as client:
             return await client.post(
                 url,
                 headers={"Content-Type": "application/json"},
-                json={
-                    "contents": contents,
-                    "generationConfig": {"temperature": 0.2},
-                },
+                json=body,
             )
 
     r = await _call(model)

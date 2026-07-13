@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 
+from tokenish_engine.meters.tokens import count_tokens
+
 
 _FILLER = re.compile(
     r"\b(please|could you|can you help me|can you look at this|"
@@ -11,11 +13,24 @@ _FILLER = re.compile(
 )
 
 
-def compress_instructions(human_prompt: str) -> dict[str, str]:
+def compress_instructions(human_prompt: str, *, follow_attachment: bool = False) -> dict[str, str]:
     """LCS-style instruction compression — never touch document bodies."""
     clean = _FILLER.sub("", human_prompt or "").strip()
     clean = re.sub(r"\s+", " ", clean)
     lower = clean.lower()
+
+    if follow_attachment:
+        context = "Expert[InstructionExecutor]"
+        logic = "1.Read(#D)->2.Execute->3.ReplyActionOnly"
+        output = "Format:Execute#D_NoRewrite"
+        inputs = f"goal={clean[:200]}" if clean else "goal=execute_attachment"
+        return {
+            "context": context,
+            "inputs": inputs,
+            "logic": logic,
+            "output": output,
+            "clean_prompt": clean or (human_prompt or "").strip(),
+        }
 
     if any(w in lower for w in ("read", "ocr", "transcribe", "extract")):
         context = "Expert[VisionOCR/DataExtractor]"
@@ -116,15 +131,41 @@ def wants_instruction_following(human_prompt: str, has_attachment: bool) -> bool
     return any(c in lower for c in cues)
 
 
-def instruction_follow_envelope(human_prompt: str, raw_document_text: str, data_type: str) -> str:
-    prompt = (human_prompt or "").strip()
+def instruction_follow_envelope(
+    human_prompt: str,
+    raw_document_text: str,
+    data_type: str,
+    nodes: dict[str, str] | None = None,
+) -> str:
+    """Minimal split-execution envelope: compact instruction + verbatim #D."""
+    clean = (nodes or {}).get("clean_prompt") or (human_prompt or "").strip()
     doc = raw_document_text or ""
     return (
-        f"{prompt}\n\n"
-        f"### ATTACHED_DOCUMENT [Type: {data_type.upper()}] (#D)\n"
-        f"Follow the attached content exactly. Do not invent material that is not in #D.\n"
-        f"```text\n{doc}\n```"
+        f"#C {nodes.get('context', 'Expert[InstructionExecutor]') if nodes else 'Expert[InstructionExecutor]'}\n"
+        f"#O Execute#D_Only;DoNotRewriteOrSummarize#D\n"
+        f"{clean}\n\n"
+        f"#D[{data_type}]\n{doc}"
     )
+
+
+def naive_baseline_prompt(human_prompt: str, raw_document_text: str) -> str:
+    """What users typically paste: prompt + full file inline (no optimizer)."""
+    if raw_document_text:
+        return f"{human_prompt}\n\n---ATTACHED FILE---\n{raw_document_text}"
+    return human_prompt or ""
+
+
+def pick_cheapest_envelope(candidates: list[tuple[str, str]]) -> tuple[str, str]:
+    """Return (stage_name, envelope_text) with lowest token count."""
+    if not candidates:
+        return ("empty", "")
+    best_stage, best_text = candidates[0]
+    best_n = count_tokens(best_text)
+    for stage, text in candidates[1:]:
+        n = count_tokens(text)
+        if n < best_n:
+            best_stage, best_text, best_n = stage, text, n
+    return best_stage, best_text
 
 
 def document_verbatim_in_envelope(envelope: str, raw_document_text: str) -> bool:
