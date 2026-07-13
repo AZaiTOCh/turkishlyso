@@ -93,13 +93,13 @@ def resolve_provider(provider: str | None, model: str | None, target_engine: str
 
 def resolve_model(provider: str, model: str | None, target_engine: str) -> str:
     m = (model or target_engine or "").strip()
-    if provider == "openai":
-        return m if m and _provider_active("openai") else settings.openai_primary_model
     if provider == "gemini":
-        return settings.gemini_model if not m or "gpt" in m.lower() else m
+        return settings.gemini_model  # always gemini-3.5-flash
     if provider == "openrouter":
-        return settings.openrouter_free_model if not m or "gpt" in m.lower() else m
-    return m or target_engine or settings.openai_primary_model
+        return settings.openrouter_free_model if not m or "gpt" in m.lower() or m.startswith("gemini") else m
+    if provider == "openai":
+        return settings.openai_primary_model
+    return m or target_engine or settings.gemini_model
 
 
 def _provider_has_key(name: str) -> bool:
@@ -179,39 +179,35 @@ def _user_content(envelope: str, image_b64: str | None, image_mime: str | None) 
 
 
 def _fallback_chain(provider: str, model: str) -> list[tuple[str, str]]:
+    # Force Gemini requests onto gemini-3.5-flash only (never other Gemini IDs).
+    if provider == "gemini" or (model or "").startswith("gemini"):
+        provider, model = "gemini", settings.gemini_model
     chain: list[tuple[str, str]] = [(provider, model)]
-    # Gemini high-demand: try alternate Gemini models before leaving the provider.
-    if provider == "gemini" or model.startswith("gemini"):
-        for alt in (
-            settings.gemini_model,
-            settings.gemini_model_fallback,
-            getattr(settings, "gemini_model_fallback_2", "gemini-2.0-flash"),
-            "gemini-2.5-flash",
-            "gemini-2.0-flash",
-        ):
-            if alt and ("gemini", alt) not in chain:
-                chain.append(("gemini", alt))
     for prov, mdl in _load_fallbacks():
+        if prov == "gemini":
+            mdl = settings.gemini_model
         if (prov, mdl) not in chain:
             chain.append((prov, mdl))
-    # Always offer OpenRouter as last resort when keyed.
     if openrouter_key() and ("openrouter", settings.openrouter_free_model) not in chain:
         chain.append(("openrouter", settings.openrouter_free_model))
-    ready = [(p, m) for p, m in chain if _provider_has_key(p)]
-    # Keep gemini attempts even if routing marked inactive after transient 503.
-    if not ready:
-        ready = [(p, m) for p, m in chain if _provider_has_key(p) or p == "gemini" and gemini_key()]
-    # Prefer keyed providers; allow gemini even when is_active flipped by old errors
     out: list[tuple[str, str]] = []
     for p, m in chain:
-        if not _provider_has_key(p):
-            continue
         if p == "gemini":
-            out.append((p, m))
+            if gemini_key():
+                out.append(("gemini", settings.gemini_model))
+            continue
+        if not _provider_has_key(p):
             continue
         if _provider_active(p):
             out.append((p, m))
-    return out or ready or [(provider, model)]
+    # de-dupe preserving order
+    seen: set[tuple[str, str]] = set()
+    uniq: list[tuple[str, str]] = []
+    for item in out:
+        if item not in seen:
+            seen.add(item)
+            uniq.append(item)
+    return uniq or [(provider, model)]
 
 
 async def chat_complete(
@@ -523,24 +519,9 @@ async def _gemini_chat(
                 json=body,
             )
 
-    r = await _call(model)
-    # Retry alternate Gemini models on 404 / 503 high demand.
-    alts = [
-        settings.gemini_model_fallback,
-        getattr(settings, "gemini_model_fallback_2", "gemini-2.0-flash"),
-        "gemini-2.5-flash",
-        "gemini-2.0-flash",
-        "gemini-flash-latest",
-    ]
-    tried = {model}
-    if r.status_code in {404, 429, 503}:
-        for alt in alts:
-            if not alt or alt in tried:
-                continue
-            tried.add(alt)
-            r = await _call(alt)
-            if r.status_code < 400:
-                break
+    r = await _call(settings.gemini_model if model.startswith("gemini") else model)
+    # Never fall back to other Gemini versions — only surface the HTTP error
+    # so the outer chain can try OpenRouter.
     if r.status_code >= 400:
         raise RuntimeError(f"gemini HTTP {r.status_code}: {r.text[:240]}")
     data = r.json()

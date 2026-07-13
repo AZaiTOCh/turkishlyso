@@ -35,19 +35,24 @@ class Settings(BaseSettings):
     enable_pxpipe: bool = True
     enable_headroom: bool = True
     enable_its: bool = True
+    enable_faiss_mib: bool = True
     kiosk_mode: bool = False
-    moorcheh_api_key: str | None = None
+    memtrove_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("MEMTROVE_API_KEY", "MOORCHEH_API_KEY"),
+    )
     pxpipe_image_tokens: int = 4761
     pxpipe_min_text_tokens: int = 4000
 
     openai_primary_model: str = "gpt-4o"
     groq_primary_model: str = "llama-3.3-70b-versatile"
     groq_fast_model: str = "llama-3.1-8b-instant"
+    # ONLY gemini-3.5-flash — never other Gemini versions
     gemini_model: str = "gemini-3.5-flash"
-    gemini_model_fallback: str = "gemini-2.5-flash"
-    gemini_model_fallback_2: str = "gemini-2.0-flash"
     openrouter_free_model: str = "openrouter/free"
     perplexity_model: str = "sonar"
+    faiss_mib_bits: int = 512
+    faiss_top_k: int = 24
 
 
 settings = Settings()
@@ -61,7 +66,6 @@ def _clean(value: str | None) -> str | None:
 
 
 def gemini_key() -> str | None:
-    # Prefer live environ (UI-saved keys) over process-start Settings snapshot.
     return _clean(
         os.environ.get("GEMINI_API_KEY")
         or os.environ.get("GOOGLE_API_KEY")
@@ -84,3 +88,11 @@ def openrouter_key() -> str | None:
 
 def groq_key() -> str | None:
     return _clean(os.environ.get("GROQ_API_KEY") or settings.groq_api_key)
+
+
+def memtrove_key() -> str | None:
+    return _clean(
+        os.environ.get("MEMTROVE_API_KEY")
+        or os.environ.get("MOORCHEH_API_KEY")
+        or settings.memtrove_api_key
+    )

@@ -12,8 +12,6 @@ let files = [];
 
 const DEFAULT_MODELS = [
   "gemini-3.5-flash",
-  "gemini-2.5-flash",
-  "gemini-2.0-flash",
   "openrouter/free",
 ];
 
@@ -69,9 +67,15 @@ function addBubble(role, content, meta = {}) {
 
 function fillModels(models, preferred) {
   const current = modelSelect.value;
-  const uniq = [...new Set([...(models || []), ...DEFAULT_MODELS].filter(Boolean))];
+  const filtered = (models || []).filter(
+    (m) => m === "gemini-3.5-flash" || m.startsWith("openrouter") || !String(m).startsWith("gemini")
+  );
+  const uniq = [...new Set([...(filtered || []), ...DEFAULT_MODELS].filter(Boolean))];
   modelSelect.innerHTML = uniq.map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join("");
-  const pick = preferred || current || "gemini-3.5-flash";
+  let pick = preferred || current || "gemini-3.5-flash";
+  if (String(pick).startsWith("gemini") && pick !== "gemini-3.5-flash") {
+    pick = "gemini-3.5-flash";
+  }
   if ([...modelSelect.options].some((o) => o.value === pick)) {
     modelSelect.value = pick;
   } else if (modelSelect.options.length) {

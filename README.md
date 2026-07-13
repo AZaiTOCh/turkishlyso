@@ -48,10 +48,9 @@ Keys can be pasted in the first-run UI (saved under `~/.tokenish/config.json`) o
 
 | variable | provider |
 |----------|----------|
-| `GPT_TOKENISH` / `OPENAI_API_KEY` | openai |
-| `GEMINI_API_KEY` | gemini |
+| `GEMINI_API_KEY` | gemini **3.5 flash only** |
 | `OPENROUTER_API_KEY` | openrouter |
-| `ANTHROPIC_API_KEY` | anthropic |
+| `MEMTROVE_API_KEY` | optional Memtrove cloud SDK |
 
 ## license
 

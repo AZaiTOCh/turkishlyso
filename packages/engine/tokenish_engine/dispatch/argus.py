@@ -316,11 +316,7 @@ async def run_preflight(*, force: bool = False) -> tuple[list[ProviderStatus], d
                 if gemini_ok and gemini_ms
                 else (gemini_err or ("key set" if gemini_key() else "GEMINI_API_KEY missing"))
             ),
-            models=[
-                settings.gemini_model,
-                settings.gemini_model_fallback,
-                getattr(settings, "gemini_model_fallback_2", "gemini-2.0-flash"),
-            ],
+            models=[settings.gemini_model],
         ),
         ProviderStatus(
             name="openrouter",

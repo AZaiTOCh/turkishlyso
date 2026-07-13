@@ -8,7 +8,11 @@ from tokenish_engine.retrieve.its import (
     mib_binarize,
     peirce_skill_score,
 )
-from tokenish_engine.retrieve.moorcheh_client import moorcheh_available, search as moorcheh_search
+from tokenish_engine.retrieve.memtrove_client import memtrove_available, search as memtrove_search
+
+# Back-compat
+moorcheh_available = memtrove_available
+moorcheh_search = memtrove_search
 
 __all__ = [
     "critical_performance_ratio",
@@ -18,6 +22,8 @@ __all__ = [
     "its_score_pair",
     "its_skill_score",
     "mib_binarize",
+    "memtrove_available",
+    "memtrove_search",
     "moorcheh_available",
     "moorcheh_search",
     "peirce_skill_score",

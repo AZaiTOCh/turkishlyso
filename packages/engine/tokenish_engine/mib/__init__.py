@@ -1,8 +1,7 @@
 """
-Maximally Informative Binarization (MIB) + ITS skill scoring.
+Maximally Informative Binarization (MIB) + ITS skill scoring + FAISS binary index.
 
-Open reimplementation of the Moorcheh-style contingency → C+/C− → RSS path
-described in the Tokenish brief. Not a copy of proprietary Moorcheh code.
+Open Memtrove-style contingency → C+/C− → RSS path for Tokenish.
 """
 
 from __future__ import annotations
@@ -12,6 +11,7 @@ from typing import Any
 
 import numpy as np
 
+from tokenish_engine.mib.faiss_index import TokenishBinaryIndex, rank_chunks_binary, texts_to_binary_matrix
 from tokenish_engine.retrieve.its import contingency_table, mib_binarize
 
 
@@ -20,7 +20,6 @@ def build_contingency(query_bits: int, doc_bits: int, bits: int = 512) -> dict[s
 
 
 def compute_c_plus(cont: dict[str, int]) -> float:
-    """Desirable information (signal)."""
     a, b, c, d, n = cont["a"], cont["b"], cont["c"], cont["d"], cont.get("N") or sum(cont[k] for k in "abcd")
     if n <= 0:
         return 0.0
@@ -30,7 +29,6 @@ def compute_c_plus(cont: dict[str, int]) -> float:
 
 
 def compute_c_minus(cont: dict[str, int]) -> float:
-    """Undesirable information (noise)."""
     a, b, c, d, n = cont["a"], cont["b"], cont["c"], cont["d"], cont.get("N") or sum(cont[k] for k in "abcd")
     if n <= 0:
         return 0.0
@@ -46,13 +44,7 @@ def retrieval_skill_score(
     bits: int = 512,
     s_q: float | None = None,
 ) -> tuple[float, float, float]:
-    """
-    RSS ≈ (C+ + C−) / S(Q).
-    Accepts packed int bitsets (local MIB) or binary arrays.
-    """
     if isinstance(query_bin, np.ndarray):
-        q = int(np.packbits(query_bin.astype(np.uint8)).tobytes().hex()[:16] or "0", 16)
-        # Prefer bit-wise path via mib ints when arrays passed as 0/1 vectors:
         q_bits = 0
         for i, bit in enumerate(query_bin.astype(int).ravel()[:bits]):
             if bit:
@@ -90,16 +82,18 @@ def score_text_pair(query: str, chunk: str, bits: int = 512) -> dict[str, Any]:
 
 
 def simple_bq(vectors: np.ndarray) -> np.ndarray:
-    """1-bit sign quantization for float embedding matrices."""
     return (vectors > 0).astype(np.uint8)
 
 
 __all__ = [
+    "TokenishBinaryIndex",
     "build_contingency",
     "compute_c_plus",
     "compute_c_minus",
+    "mib_binarize",
+    "rank_chunks_binary",
     "retrieval_skill_score",
     "score_text_pair",
     "simple_bq",
-    "mib_binarize",
+    "texts_to_binary_matrix",
 ]

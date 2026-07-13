@@ -1,15 +1,12 @@
 """
-Moorcheh-inspired Information-Theoretic Scoring (open reimplementation).
+Memtrove-inspired Information-Theoretic Scoring (open reimplementation).
 
 Sources decoded into this module:
-  - Architecture PDF: MIB → contingency (a,b,c,d) → ITS / RSS skill score,
+  - Architecture brief: MIB → contingency (a,b,c,d) → ITS / RSS skill score,
     CPR honesty gate, Drift-Terminator pruning, Kiosk Mode.
-  - Public org https://github.com/moorcheh-ai (SDK exposes search + kiosk_mode;
-    proprietary MIB engine is NOT copied — only published API shapes +
-    meteorological skill-score math described in the brief).
+  - Local Memtrove-compatible semantics (optional cloud SDK via memtrove_client).
 
 This is an open approximation for local gating before LLM context assembly.
-Optional cloud search: see moorcheh_client.py (uses moorcheh-sdk if installed).
 """
 
 from __future__ import annotations
@@ -30,7 +27,7 @@ def mib_binarize(text: str, bits: int = 512) -> int:
     """
     Open MIB-style binarization: map tokens → bit positions via hashing.
 
-    Not Moorcheh's proprietary transform — a local stand-in that preserves the
+    Not Memtrove's proprietary transform — a local stand-in that preserves the
     bitwise contingency workflow from the decode brief.
     """
     vec = 0
@@ -111,7 +108,7 @@ def its_score_pair(query: str, chunk: str, bits: int = 512) -> dict[str, float |
     hss = heidke_skill_score(table["a"], table["b"], table["c"], table["d"])
     pss = peirce_skill_score(table["a"], table["b"], table["c"], table["d"])
     cpr = critical_performance_ratio(table["a"], table["b"], table["c"], table["d"])
-    # Moorcheh-style C+/C− RSS (info-theoretic) blended with HSS/PSS
+    # Memtrove-style C+/C− RSS (info-theoretic) blended with HSS/PSS
     from tokenish_engine.mib import retrieval_skill_score
 
     rss, c_plus, c_minus = retrieval_skill_score(q, d, bits=bits)
@@ -185,13 +182,44 @@ def gate_document(
                 )
         return GatedDocument(text=document, dropped=0, kept=len(chunks), scores=[])
 
+    # FAISS binary prefilter when many chunks — then ITS on shortlist
+    candidate_idxs = list(range(len(chunks)))
+    faiss_meta: dict = {}
+    if getattr(settings, "enable_faiss_mib", True) and len(chunks) > 8:
+        try:
+            from tokenish_engine.mib import rank_chunks_binary
+
+            top_k = min(int(getattr(settings, "faiss_top_k", 24)), len(chunks))
+            ranked = rank_chunks_binary(
+                query,
+                chunks,
+                bits=int(getattr(settings, "faiss_mib_bits", 512)),
+                top_k=top_k,
+            )
+            candidate_idxs = [i for i, _d, _t in ranked]
+            faiss_meta = {
+                "faiss_prefilter": True,
+                "faiss_top_k": top_k,
+                "faiss_candidates": len(candidate_idxs),
+                "faiss_backend": "faiss_or_numpy",
+            }
+        except Exception as exc:
+            faiss_meta = {"faiss_prefilter": False, "faiss_error": str(exc)[:120]}
+
     kept: list[str] = []
     scores: list[float] = []
     labels: list[str] = []
     details: list[dict] = []
     dropped = 0
-    for ch in chunks:
+    seen: set[int] = set()
+    for idx in candidate_idxs:
+        if idx in seen or idx < 0 or idx >= len(chunks):
+            continue
+        seen.add(idx)
+        ch = chunks[idx]
         detail = its_score_pair(query, ch)
+        if faiss_meta:
+            detail = {**detail, **faiss_meta}
         score = float(detail["its"])
         scores.append(score)
         labels.append(str(detail["label"]))
@@ -199,12 +227,15 @@ def gate_document(
         if len(ch) < min_chunk_chars:
             kept.append(ch)
             continue
-        # Drift-Terminator: CPR + ITS below threshold ⇒ prune branch
         cpr = float(detail["cpr"])
         if score >= thr and cpr >= 0.35:
             kept.append(ch)
         else:
             dropped += 1
+
+    # Count non-candidate chunks as dropped when FAISS shortlisted
+    if faiss_meta.get("faiss_prefilter"):
+        dropped += max(0, len(chunks) - len(seen))
 
     if not kept:
         if kiosk_mode:
@@ -217,7 +248,6 @@ def gate_document(
                 kiosk_blocked=True,
                 details=details,
             )
-        # Non-kiosk honesty fallback: keep original rather than empty #D
         return GatedDocument(
             text=document,
             dropped=0,

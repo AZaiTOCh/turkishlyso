@@ -16,7 +16,7 @@ from tokenish_engine.dispatch import chat_complete, chat_stream, preflight_full,
 from tokenish_engine.dispatch.providers import StreamSession
 from tokenish_engine.history import compress_history
 from tokenish_engine.pipeline import optimize
-from tokenish_engine.retrieve import moorcheh_available
+from tokenish_engine.retrieve import memtrove_available
 from tokenish_engine.settings_store import (
     apply_saved_keys_to_environ,
     load_keys,
@@ -56,7 +56,7 @@ async def root_ui():
 
 @app.get("/health")
 async def health() -> dict[str, Any]:
-    return {"status": "ok", "version": __version__, "moorcheh_sdk": moorcheh_available()}
+    return {"status": "ok", "version": __version__, "memtrove_sdk": memtrove_available()}
 
 
 @app.get("/settings/keys")
