@@ -83,7 +83,12 @@ def mumblz_title(title: str) -> str:
     parts = [p for p in re.split(r"\s+", (title or "").strip()) if p]
     if not parts:
         return "Fresh Thread"
-    return " ".join(_title_case(p) for p in parts[:_TITLE_WORDS])
+    out = " ".join(_title_case(p) for p in parts[:_TITLE_WORDS])
+    # Never emit vowel-stripped stubs from older Mumblz revisions.
+    letters = re.sub(r"[^A-Za-z]", "", out)
+    if letters and not re.search(r"[aeiouAEIOU]", letters):
+        return "Fresh Thread"
+    return out
 
 
 def _title_case(word: str) -> str:

@@ -9,7 +9,7 @@ const providerSelect = document.getElementById("provider");
 const threadListEl = document.getElementById("threadList");
 
 const STORE_KEY = "tokenish.threads.v2";
-const MUMBLZ_REV = "two-word-v1";
+const MUMBLZ_REV = "two-word-vowels-v2";
 const WELCOME = "Attach a pdf, docx, xlsx, csv, or image. tokenish optimizes every send automatically.";
 
 const DEFAULT_MODELS = [
@@ -248,6 +248,13 @@ function mumblzTitle(title) {
   return parts.slice(0, 2).map(titleCaseWord).join(" ");
 }
 
+/** True if title looks vowel-stripped (old Mumblz mumble). Never keep these. */
+function isVowellessTitle(title) {
+  const letters = String(title || "").replace(/[^A-Za-z]/g, "");
+  if (letters.length < 2) return false;
+  return !/[aeiouAEIOU]/.test(letters);
+}
+
 /** Mumblz local title: two most suitable words from the dialog. */
 function interpretTitleLocal(messages) {
   const stop = new Set([
@@ -293,6 +300,7 @@ function interpretTitleLocal(messages) {
   const add = (word, sem) => {
     const t = titleCaseWord(String(word || "").replace(/[^A-Za-z0-9-]/g, ""));
     if (!t || t.length < 3 || stop.has(t.toLowerCase())) return;
+    if (isVowellessTitle(t)) return;
     pool.set(t, Math.max(pool.get(t) || 0, sem));
   };
 
@@ -332,14 +340,15 @@ function looksProvisionalTitle(title) {
   if (t.includes("…") || t.includes("...")) return true;
   if (t.length > 36) return true;
   const parts = t.split(/\s+/).filter(Boolean);
-  // Old 3-word or vowel-stripped titles need retitle
   if (parts.length !== 2) return true;
-  if (!/[aeiouAEIOU]/.test(t)) return true;
+  if (isVowellessTitle(t)) return true;
   return false;
 }
 
 function applyThreadTitle(thread, next) {
-  const title = mumblzTitle(String(next || "").trim());
+  let title = mumblzTitle(String(next || "").trim());
+  // Never keep old vowel-stripped labels.
+  if (isVowellessTitle(title)) return false;
   if (!thread || !title) return false;
   if (title === thread.title) return false;
   thread.title = title;
@@ -358,21 +367,24 @@ async function refreshThreadTitle(thread, { useLlm = false } = {}) {
     .map((m) => ({ role: m.role, content: String(m.content || "").slice(0, 2000) }));
   if (messages.length < 2) return;
 
-  // Mumblz local instantly.
-  if (!useLlm) {
-    applyThreadTitle(thread, interpretTitleLocal(messages));
-  }
+  // Always set a clear local 2-word title first (never vowelless).
+  applyThreadTitle(thread, interpretTitleLocal(messages));
+
+  // Optional LLM polish only — reject vowelless server responses (stale daemon).
+  if (!useLlm) return;
 
   try {
     const res = await fetch("/mumblz", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages, use_llm: !!useLlm }),
+      body: JSON.stringify({ messages, use_llm: true }),
     });
     const data = await res.json().catch(() => ({}));
-    if (res.ok && data.title) applyThreadTitle(thread, data.title);
+    if (res.ok && data.title && !isVowellessTitle(data.title)) {
+      applyThreadTitle(thread, data.title);
+    }
   } catch {
-    // local Mumblz title already applied when !useLlm
+    // local title already applied
   }
 }
 
@@ -385,6 +397,10 @@ async function retitleAllThreads({ force = false } = {}) {
     );
     if (msgs.length < 2) continue;
     if (!mustForce && !looksProvisionalTitle(th.title)) continue;
+    // Wipe vowelless / provisional title so apply always writes the new one.
+    if (isVowellessTitle(th.title) || looksProvisionalTitle(th.title)) {
+      th.title = "New chat";
+    }
     await refreshThreadTitle(th, { useLlm: false });
   }
   localStorage.setItem("tokenish.mumblz.rev", MUMBLZ_REV);
