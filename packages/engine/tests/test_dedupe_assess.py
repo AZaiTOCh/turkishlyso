@@ -56,3 +56,26 @@ def test_assess_duplicate_doc_saves_tokens():
     assert result.tokex.saved_tokex > 100
     assert result.tokex.saved_pct > 5
     assert any(s.startswith("dedupe_drop_") for s in result.stages)
+    assert "its_skipped_assess" in result.stages
+    assert not any(s.startswith("its_drop_") for s in result.stages)
+
+
+def test_assess_keeps_unique_document_body():
+    # Unique paragraphs must survive (no ITS gutting on assess).
+    paras = [
+        f"Section {i}: freefactorial G-Triangle pattern definition and recurrence. " * 8
+        for i in range(12)
+    ]
+    doc = "\n\n".join(paras)
+    result = optimize(
+        prompt="Deeply assess the attached. then generate a one page exec summary after fact checking everything.",
+        files=[("math.txt", doc.encode("utf-8"))],
+        target_engine="gemini-3.5-flash",
+        model="gemini-3.5-flash",
+        enable_pxpipe=False,
+        enable_its=True,
+    )
+    assert "its_skipped_assess" in result.stages
+    assert "Freefactorial" in result.envelope or "freefactorial" in result.envelope.lower()
+    assert result.tokex.tokex_this_run > 200
+

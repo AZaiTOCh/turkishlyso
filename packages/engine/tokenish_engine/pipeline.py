@@ -8,6 +8,7 @@ from tokenish_engine.compile import (
     instruction_follow_envelope,
     naive_baseline_prompt,
     pick_cheapest_envelope,
+    wants_full_document_context,
     wants_instruction_following,
 )
 from tokenish_engine.compile.format_rewrite import maybe_tabular_cheaper
@@ -85,7 +86,7 @@ def optimize(
             raw_doc = compressed
             stages.append(stage)
 
-    if use_its and raw_doc and not follow_mode:
+    if use_its and raw_doc and not follow_mode and not wants_full_document_context(prompt):
         gated = gate_document(
             prompt,
             raw_doc,
@@ -108,6 +109,8 @@ def optimize(
             stages.append(f"its_drop_{gated.dropped}")
             if any(isinstance(d, dict) and d.get("faiss_prefilter") for d in (gated.details or [])):
                 stages.append("faiss_mib")
+    elif use_its and wants_full_document_context(prompt) and raw_doc and not follow_mode:
+        stages.append("its_skipped_assess")
 
     px_applied = False
     px_surcharge = 0

@@ -50,12 +50,11 @@ def compress_instructions(human_prompt: str, *, follow_attachment: bool = False)
 
     if "json" in lower:
         output = "Format:ValidJSON"
-    elif any(w in lower for w in ("summary", "summarize", "bullet")):
-        output = "Format:BulletPoints[Dense]"
     elif "table" in lower:
         output = "Format:MarkdownTable"
     else:
-        output = "Format:DenseExecutiveSummary"
+        # Prefer clean chat prose — avoid ### / ** markdown report chrome.
+        output = "Format:PlainProse;NoMarkdownHeaders;NoBoldDecoration"
 
     inputs = f"goal={clean[:240]}" if clean else "goal=unspecified"
     return {
@@ -107,6 +106,30 @@ def baseline_prompt(human_prompt: str, raw_document_text: str) -> str:
     return human_prompt or ""
 
 
+def wants_full_document_context(human_prompt: str) -> bool:
+    """Assess / summarize / fact-check need the whole #D — do not ITS-gut it."""
+    lower = (human_prompt or "").strip().lower()
+    cues = (
+        "assess",
+        "analyze",
+        "analyse",
+        "summarize",
+        "summarise",
+        "executive summary",
+        "exec summary",
+        "fact check",
+        "fact-check",
+        "factchecking",
+        "vetting",
+        "review",
+        "evaluate",
+        "critique",
+        "one-page",
+        "one page",
+    )
+    return any(c in lower for c in cues)
+
+
 def wants_instruction_following(human_prompt: str, has_attachment: bool) -> bool:
     """True only when the user wants the model to *execute* attachment instructions."""
     if not has_attachment:
@@ -116,15 +139,9 @@ def wants_instruction_following(human_prompt: str, has_attachment: bool) -> bool
         return False
 
     # Analysis / review tasks must NOT lock follow-mode (need ITS + dedupe).
+    if wants_full_document_context(human_prompt):
+        return False
     analyze_cues = (
-        "assess",
-        "analyze",
-        "analyse",
-        "summarize",
-        "summarise",
-        "review",
-        "evaluate",
-        "critique",
         "explain",
         "what does",
         "tell me about",

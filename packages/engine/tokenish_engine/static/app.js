@@ -31,6 +31,19 @@ function escapeHtml(s) {
     .replaceAll(">", "&gt;");
 }
 
+/** Soft-clean model markdown into readable plain-looking HTML (no report chrome). */
+function formatReply(text) {
+  let s = String(text || "");
+  // Strip common markdown report decoration while keeping readable structure.
+  s = s.replace(/^#{1,6}\s+/gm, "");
+  s = s.replace(/\*\*([^*]+)\*\*/g, "$1");
+  s = s.replace(/__([^_]+)__/g, "$1");
+  s = s.replace(/\*([^*]+)\*/g, "$1");
+  s = s.replace(/^---+$/gm, "");
+  s = s.replace(/^>\s?/gm, "");
+  return escapeHtml(s);
+}
+
 function renderTokex(t) {
   const saved = t ? (t.saved_tokex ?? t.saved_tokens ?? 0) : 0;
   const total = t ? (t.total_tokex ?? t.original_tokens ?? 0) : 0;
@@ -55,14 +68,23 @@ function renderTokex(t) {
 function addBubble(role, content, meta = {}) {
   const div = document.createElement("div");
   div.className = `bubble ${role}`;
-  const bits = [role];
-  if (meta.provider) bits.push(`${meta.provider}/${meta.model || ""}`);
-  const t = meta.tokex || meta.meter;
-  if (t) bits.push(`saved ${t.saved_tokex ?? t.saved_tokens} (${t.saved_pct}%)`);
-  div.innerHTML = `<div class="meta">${bits.join(" · ")}</div>${escapeHtml(content)}`;
+  if (role === "user") {
+    div.innerHTML = `<div class="body">${escapeHtml(content)}</div>`;
+  } else {
+    div.innerHTML = `<div class="body">${formatReply(content)}</div>`;
+  }
   messagesEl.appendChild(div);
   messagesEl.scrollTop = messagesEl.scrollHeight;
   return div;
+}
+
+function makeTknshLoader() {
+  const wrap = document.createElement("div");
+  wrap.className = "bubble assistant thinking";
+  wrap.innerHTML = `<div class="tknsh" aria-label="working"><span>t</span><span>k</span><span>n</span><span>s</span><span>h</span></div>`;
+  messagesEl.appendChild(wrap);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  return wrap;
 }
 
 function fillModels(models, preferred) {
@@ -111,7 +133,6 @@ async function loadProviders() {
     const pref = data.preferred;
     fillModels(modelSet, pref?.model);
     if (pref?.provider && [...providerSelect.options].some((o) => o.value === pref.provider)) {
-      // keep auto as default for resilience
       providerSelect.value = "auto";
     }
   } catch {
@@ -141,7 +162,8 @@ async function send() {
   if (pageRange) fd.append("page_range", pageRange);
   for (const f of files) fd.append("files", f);
 
-  const bubble = addBubble("assistant", "");
+  const loader = makeTknshLoader();
+  let bubble = null;
   let assistant = "";
   let meta = {};
 
@@ -164,30 +186,18 @@ async function send() {
         if (evt.type === "meta") {
           meta = evt;
           renderTokex(evt.tokex || evt.meter);
-          if (Array.isArray(evt.stages) && evt.stages.length) {
-            const stageLine = evt.stages.filter((s) => s && s !== "ingest" && s !== "lcs").slice(-6).join(" → ");
-            if (stageLine) {
-              // keep quiet unless useful
-              meta.stagesNote = stageLine;
-            }
-          }
         } else if (evt.type === "routing") {
           meta.provider = evt.provider;
           meta.model = evt.model;
           meta.fallback_used = evt.fallback_used;
           meta.fallback_reason = evt.fallback_reason;
         } else if (evt.type === "delta") {
-          assistant += evt.text || "";
-          const t = meta.tokex || meta.meter;
-          let route = meta.provider ? `${meta.provider}/${meta.model}` : "";
-          if (meta.fallback_used) {
-            route += meta.fallback_reason
-              ? ` (fallback: ${meta.fallback_reason})`
-              : " (fallback)";
+          if (!bubble) {
+            loader.remove();
+            bubble = addBubble("assistant", "");
           }
-          bubble.innerHTML = `<div class="meta">assistant${route ? ` · ${route}` : ""}${
-            t ? ` · saved ${t.saved_tokex ?? t.saved_tokens} (${t.saved_pct}%)` : ""
-          }${meta.stagesNote ? ` · ${escapeHtml(meta.stagesNote)}` : ""}</div>${escapeHtml(assistant)}`;
+          assistant += evt.text || "";
+          bubble.querySelector(".body").innerHTML = formatReply(assistant);
           messagesEl.scrollTop = messagesEl.scrollHeight;
         } else if (evt.type === "error") {
           throw new Error(evt.error || "chat failed");
@@ -200,8 +210,10 @@ async function send() {
     fileInput.value = "";
     renderAttachments();
   } catch (e) {
+    loader.remove();
     showError(e.message || String(e));
-    bubble.innerHTML = `<div class="meta">assistant</div>${escapeHtml("error: " + (e.message || e))}`;
+    if (!bubble) bubble = addBubble("assistant", "");
+    bubble.querySelector(".body").innerHTML = formatReply("error: " + (e.message || e));
   }
 }
 
@@ -214,7 +226,7 @@ document.getElementById("sendBtn").onclick = () => send();
 document.getElementById("newChat").onclick = () => {
   history = [];
   messagesEl.innerHTML = "";
-  addBubble("assistant", "attach a pdf, docx, xlsx, csv, or image. tokenish optimizes every send automatically.");
+  addBubble("assistant", "Attach a pdf, docx, xlsx, csv, or image. tokenish optimizes every send automatically.");
 };
 promptEl.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
@@ -259,7 +271,7 @@ async function handleKeySave(fromModal) {
     if (fromModal) document.getElementById("keyModal").hidden = true;
     if (msg) msg.hidden = true;
     showError("");
-    addBubble("assistant", `keys saved (${(data.saved || []).join(", ") || "ok"}). try sending again.`);
+    addBubble("assistant", `Keys saved (${(data.saved || []).join(", ") || "ok"}). Try sending again.`);
     await loadProviders();
   } catch (e) {
     showError(e.message || String(e));
@@ -273,7 +285,7 @@ document.getElementById("keySkip")?.addEventListener("click", () => {
 document.getElementById("keySave")?.addEventListener("click", () => handleKeySave(true));
 document.getElementById("sideKeySave")?.addEventListener("click", () => handleKeySave(false));
 
-addBubble("assistant", "attach a pdf, docx, xlsx, csv, or image. tokenish optimizes every send automatically.");
+addBubble("assistant", "Attach a pdf, docx, xlsx, csv, or image. tokenish optimizes every send automatically.");
 fillModels(DEFAULT_MODELS);
 loadProviders();
 maybeShowKeyWizard();

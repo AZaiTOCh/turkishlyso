@@ -7,6 +7,7 @@ from tokenish_engine.compile.lcs import (
     instruction_follow_envelope,
     naive_baseline_prompt,
     pick_cheapest_envelope,
+    wants_full_document_context,
     wants_instruction_following,
 )
 from tokenish_engine.compile.tokenizer_gate import apply_if_cheaper, reject_char_shorthand
@@ -22,5 +23,6 @@ __all__ = [
     "pick_cheapest_envelope",
     "apply_if_cheaper",
     "reject_char_shorthand",
+    "wants_full_document_context",
     "wants_instruction_following",
 ]
