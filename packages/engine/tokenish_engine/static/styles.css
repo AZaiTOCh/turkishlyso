@@ -61,6 +61,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   text-align: left;
   color: #18181b;
   width: 100%;
+  position: relative;
 }
 .thread-item:hover { background: #f4f4f5; }
 .thread-item.active { background: #fff; border-color: var(--border); }
@@ -69,11 +70,47 @@ button, input, select, textarea { font: inherit; color: inherit; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   font-size: 0.86rem;
 }
-.thread-item .del {
-  border: none; background: transparent; color: #a1a1aa;
-  cursor: pointer; padding: 0 4px; font-size: 0.9rem; line-height: 1;
+.thread-actions { position: relative; flex-shrink: 0; }
+.menu-btn {
+  border: none; background: transparent; color: #71717a;
+  cursor: pointer; padding: 2px 6px; font-size: 1.1rem; line-height: 1;
+  border-radius: 6px;
 }
-.thread-item .del:hover { color: #dc2626; }
+.menu-btn:hover { color: #18181b; background: #e4e4e7; }
+.thread-menu {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 20;
+  min-width: 168px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(24, 24, 27, 0.12);
+  padding: 8px;
+}
+.thread-menu.open { display: block; }
+.thread-when {
+  color: #71717a;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  padding: 4px 6px 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+.thread-del {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: #dc2626;
+  text-align: left;
+  padding: 8px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.86rem;
+}
+.thread-del:hover { background: #fef2f2; }
 select, input[type="text"], input[type="password"] {
   width: 100%;
   background: #fff;

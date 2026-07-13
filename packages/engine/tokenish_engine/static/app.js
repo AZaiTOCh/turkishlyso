@@ -130,31 +130,25 @@ function renderTokexPanel() {
   const before = t.before || 0;
   const after = t.after || 0;
   const saved = Math.max(0, t.saved || before - after);
-  const weighted = before > 0 ? Math.round((saved / before) * 10000) / 100 : 0;
-  const sumPct =
-    Math.round((t.sends || []).reduce((acc, s) => acc + Number(s.pct || 0), 0) * 100) / 100;
+  // Grand total = total tokens saved / total tokens before (across all sends).
+  const grandPct = before > 0 ? Math.round((saved / before) * 10000) / 100 : 0;
 
-  document.getElementById("tokexSaved").textContent = t.sends.length
-    ? `Saved Tokens ${sumPct}%`
-    : before
-      ? `Saved Tokens ${weighted}%`
-      : "Saved Tokens 0%";
+  document.getElementById("tokexSaved").textContent = before
+    ? `Saved Tokens ${grandPct}%`
+    : "Saved Tokens 0%";
   document.getElementById("tokexScope").textContent = t.sends.length
-    ? `lifetime total · all chats · ${t.sends.length} send${t.sends.length === 1 ? "" : "s"} (rates added)`
-    : "lifetime total · all chats";
+    ? `lifetime grand total · ${t.sends.length} send${t.sends.length === 1 ? "" : "s"} · all chats`
+    : "lifetime grand total · all chats";
   document.getElementById("tokexTotal").textContent = Number(before).toLocaleString();
   document.getElementById("tokexRun").textContent = Number(after).toLocaleString();
-  document.getElementById("tokexPct").textContent = `${Number(saved).toLocaleString()} (${weighted}% weighted)`;
+  document.getElementById("tokexPct").textContent = `${Number(saved).toLocaleString()} (${grandPct}%)`;
 
   const weightedEl = document.getElementById("tokexWeighted");
   if (t.sends.length > 1) {
     weightedEl.hidden = false;
+    const parts = t.sends.map((s) => Number(s.saved || 0).toLocaleString()).join(" + ");
     weightedEl.textContent =
-      `token-weighted lifetime: ${weighted}% · ` +
-      `sum of send rates: ${t.sends.map((s) => `${s.pct}%`).join(" + ")} = ${sumPct}%`;
-  } else if (t.sends.length === 1) {
-    weightedEl.hidden = false;
-    weightedEl.textContent = `token-weighted: ${weighted}%`;
+      `saved ${parts} = ${Number(saved).toLocaleString()} ÷ before ${Number(before).toLocaleString()} = ${grandPct}%`;
   } else {
     weightedEl.hidden = true;
     weightedEl.textContent = "";
@@ -168,8 +162,8 @@ function renderTokexPanel() {
     sendsEl.innerHTML = recent
       .map(
         (s, i) =>
-          `<div>send ${offset + i + 1}: ${s.pct}% · saved ${Number(s.saved).toLocaleString()} ` +
-          `(${Number(s.before).toLocaleString()} → ${Number(s.after).toLocaleString()})</div>`,
+          `<div>send ${offset + i + 1}: saved ${Number(s.saved).toLocaleString()} ` +
+          `(${Number(s.before).toLocaleString()} → ${Number(s.after).toLocaleString()}) · ${s.pct}%</div>`,
       )
       .join("");
   } else {
@@ -228,16 +222,51 @@ function titleFromPrompt(prompt) {
   return t.length > 42 ? `${t.slice(0, 42)}…` : t;
 }
 
+function formatThreadWhen(ts) {
+  try {
+    return new Date(ts || Date.now()).toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch {
+    return "";
+  }
+}
+
+function closeAllThreadMenus() {
+  document.querySelectorAll(".thread-menu.open").forEach((el) => el.classList.remove("open"));
+}
+
 function renderThreadList() {
+  closeAllThreadMenus();
   const sorted = [...threads].sort((a, b) => b.updatedAt - a.updatedAt);
   threadListEl.innerHTML = "";
   for (const th of sorted) {
     const row = document.createElement("div");
     row.className = `thread-item${th.id === activeId ? " active" : ""}`;
-    row.innerHTML = `<span class="title">${escapeHtml(th.title)}</span><button class="del" type="button" title="delete">×</button>`;
+    row.innerHTML =
+      `<span class="title">${escapeHtml(th.title)}</span>` +
+      `<div class="thread-actions">` +
+      `<button class="menu-btn" type="button" title="more" aria-label="more">⋮</button>` +
+      `<div class="thread-menu">` +
+      `<div class="thread-when">${escapeHtml(formatThreadWhen(th.updatedAt))}</div>` +
+      `<button class="thread-del" type="button">Delete</button>` +
+      `</div></div>`;
     row.querySelector(".title").onclick = () => selectThread(th.id);
-    row.querySelector(".del").onclick = (e) => {
+    const menuBtn = row.querySelector(".menu-btn");
+    const menu = row.querySelector(".thread-menu");
+    menuBtn.onclick = (e) => {
       e.stopPropagation();
+      const wasOpen = menu.classList.contains("open");
+      closeAllThreadMenus();
+      if (!wasOpen) menu.classList.add("open");
+    };
+    row.querySelector(".thread-del").onclick = (e) => {
+      e.stopPropagation();
+      closeAllThreadMenus();
       deleteThread(th.id);
     };
     threadListEl.appendChild(row);
@@ -450,6 +479,7 @@ fileInput.onchange = () => {
 };
 document.getElementById("sendBtn").onclick = () => send();
 document.getElementById("newChat").onclick = () => createChat();
+document.addEventListener("click", () => closeAllThreadMenus());
 promptEl.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
