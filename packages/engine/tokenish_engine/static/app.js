@@ -8,7 +8,7 @@ const modelSelect = document.getElementById("model");
 const providerSelect = document.getElementById("provider");
 const threadListEl = document.getElementById("threadList");
 
-const STORE_KEY = "tokenish.threads.v1";
+const STORE_KEY = "tokenish.threads.v2";
 const WELCOME = "Attach a pdf, docx, xlsx, csv, or image. tokenish optimizes every send automatically.";
 
 const DEFAULT_MODELS = [
@@ -19,13 +19,51 @@ const DEFAULT_MODELS = [
 let files = [];
 let threads = [];
 let activeId = null;
+/** Lifetime totals across ALL chats — never reset on new chat. */
+let lifetime = emptyTokex();
 
 function uid() {
   return `t_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function emptyTokex() {
-  return { before: 0, after: 0, saved: 0, last: null };
+  return { before: 0, after: 0, saved: 0, last: null, sends: [] };
+}
+
+function normalizeTokex(raw) {
+  const t = { ...emptyTokex(), ...(raw || {}) };
+  if (!Array.isArray(t.sends)) t.sends = [];
+  if (!t.sends.length && t.last && (t.before || t.after)) {
+    const firstBefore = Math.max(0, t.before - (t.last.before || 0));
+    const firstAfter = Math.max(0, t.after - (t.last.after || 0));
+    const firstSaved = Math.max(0, t.saved - (t.last.saved || 0));
+    if (firstBefore > 0) {
+      t.sends.push({
+        before: firstBefore,
+        after: firstAfter,
+        saved: firstSaved,
+        pct: Math.round((firstSaved / firstBefore) * 10000) / 100,
+      });
+    }
+    t.sends.push({ ...t.last });
+  }
+  return t;
+}
+
+function rebuildLifetimeFromThreads() {
+  const agg = emptyTokex();
+  for (const th of threads) {
+    const t = normalizeTokex(th.tokex);
+    th.tokex = t;
+    for (const s of t.sends) {
+      agg.before += Number(s.before || 0);
+      agg.after += Number(s.after || 0);
+      agg.saved += Number(s.saved || 0);
+      agg.sends.push({ ...s, threadId: th.id, title: th.title });
+      agg.last = s;
+    }
+  }
+  return agg;
 }
 
 function newThread(title = "New chat") {
@@ -40,7 +78,7 @@ function newThread(title = "New chat") {
 
 function loadStore() {
   try {
-    const raw = localStorage.getItem(STORE_KEY);
+    const raw = localStorage.getItem(STORE_KEY) || localStorage.getItem("tokenish.threads.v1");
     if (!raw) return null;
     return JSON.parse(raw);
   } catch {
@@ -51,7 +89,7 @@ function loadStore() {
 function saveStore() {
   localStorage.setItem(
     STORE_KEY,
-    JSON.stringify({ activeId, threads }),
+    JSON.stringify({ activeId, threads, lifetime }),
   );
 }
 
@@ -86,39 +124,80 @@ function formatReply(text) {
   return escapeHtml(s);
 }
 
-function renderTokexPanel(thread) {
-  const t = thread?.tokex || emptyTokex();
+function renderTokexPanel() {
+  const t = normalizeTokex(lifetime);
+  lifetime = t;
   const before = t.before || 0;
   const after = t.after || 0;
   const saved = Math.max(0, t.saved || before - after);
-  const pct = before > 0 ? Math.round((saved / before) * 10000) / 100 : 0;
-  document.getElementById("tokexSaved").textContent = before
-    ? `Saved Tokens ${pct}%`
-    : "Saved Tokens 0%";
-  document.getElementById("tokexScope").textContent = "session total (this chat)";
+  const weighted = before > 0 ? Math.round((saved / before) * 10000) / 100 : 0;
+  const sumPct =
+    Math.round((t.sends || []).reduce((acc, s) => acc + Number(s.pct || 0), 0) * 100) / 100;
+
+  document.getElementById("tokexSaved").textContent = t.sends.length
+    ? `Saved Tokens ${sumPct}%`
+    : before
+      ? `Saved Tokens ${weighted}%`
+      : "Saved Tokens 0%";
+  document.getElementById("tokexScope").textContent = t.sends.length
+    ? `lifetime total · all chats · ${t.sends.length} send${t.sends.length === 1 ? "" : "s"} (rates added)`
+    : "lifetime total · all chats";
   document.getElementById("tokexTotal").textContent = Number(before).toLocaleString();
   document.getElementById("tokexRun").textContent = Number(after).toLocaleString();
-  document.getElementById("tokexPct").textContent = `${Number(saved).toLocaleString()} (${pct}%)`;
-  const lastEl = document.getElementById("tokexLast");
-  if (t.last) {
-    lastEl.hidden = false;
-    lastEl.textContent = `last send: ${t.last.pct}% · saved ${Number(t.last.saved).toLocaleString()} (before ${Number(t.last.before).toLocaleString()} → after ${Number(t.last.after).toLocaleString()})`;
+  document.getElementById("tokexPct").textContent = `${Number(saved).toLocaleString()} (${weighted}% weighted)`;
+
+  const weightedEl = document.getElementById("tokexWeighted");
+  if (t.sends.length > 1) {
+    weightedEl.hidden = false;
+    weightedEl.textContent =
+      `token-weighted lifetime: ${weighted}% · ` +
+      `sum of send rates: ${t.sends.map((s) => `${s.pct}%`).join(" + ")} = ${sumPct}%`;
+  } else if (t.sends.length === 1) {
+    weightedEl.hidden = false;
+    weightedEl.textContent = `token-weighted: ${weighted}%`;
   } else {
-    lastEl.hidden = true;
-    lastEl.textContent = "";
+    weightedEl.hidden = true;
+    weightedEl.textContent = "";
+  }
+
+  const sendsEl = document.getElementById("tokexSends");
+  if (t.sends.length) {
+    sendsEl.hidden = false;
+    const recent = t.sends.slice(-8);
+    const offset = t.sends.length - recent.length;
+    sendsEl.innerHTML = recent
+      .map(
+        (s, i) =>
+          `<div>send ${offset + i + 1}: ${s.pct}% · saved ${Number(s.saved).toLocaleString()} ` +
+          `(${Number(s.before).toLocaleString()} → ${Number(s.after).toLocaleString()})</div>`,
+      )
+      .join("");
+  } else {
+    sendsEl.hidden = true;
+    sendsEl.innerHTML = "";
   }
 }
 
 function accumulateTokex(thread, report) {
   if (!thread || !report) return;
+  thread.tokex = normalizeTokex(thread.tokex);
+  lifetime = normalizeTokex(lifetime);
   const before = Number(report.total_tokex ?? report.original_tokens ?? 0);
   const after = Number(report.tokex_this_run ?? report.optimized_tokens ?? 0);
   const saved = Number(report.saved_tokex ?? report.saved_tokens ?? Math.max(0, before - after));
-  const pct = Number(report.saved_pct ?? (before > 0 ? (saved / before) * 100 : 0));
+  const pct =
+    Math.round(Number(report.saved_pct ?? (before > 0 ? (saved / before) * 100 : 0)) * 100) / 100;
+  const send = { before, after, saved, pct, threadId: thread.id, title: thread.title };
   thread.tokex.before += before;
   thread.tokex.after += after;
   thread.tokex.saved += saved;
-  thread.tokex.last = { before, after, saved, pct: Math.round(pct * 100) / 100 };
+  thread.tokex.last = send;
+  thread.tokex.sends.push(send);
+  lifetime.before += before;
+  lifetime.after += after;
+  lifetime.saved += saved;
+  lifetime.last = send;
+  lifetime.sends.push(send);
 }
 
 function addBubble(role, content) {
@@ -170,7 +249,7 @@ function renderMessages(thread) {
   for (const m of thread.messages || []) {
     addBubble(m.role, m.content);
   }
-  renderTokexPanel(thread);
+  renderTokexPanel();
 }
 
 function selectThread(id) {
@@ -190,7 +269,7 @@ function createChat() {
   activeId = th.id;
   files = [];
   renderAttachments();
-  renderMessages(th);
+  renderMessages(th); // keeps lifetime TOKEX panel — does not reset
   renderThreadList();
   saveStore();
   promptEl.focus();
@@ -198,8 +277,14 @@ function createChat() {
 
 function deleteThread(id) {
   threads = threads.filter((t) => t.id !== id);
+  // Keep lifetime totals even if a chat is deleted (history of savings stays).
   if (!threads.length) {
-    createChat();
+    const th = newThread();
+    threads = [th];
+    activeId = th.id;
+    renderMessages(th);
+    renderThreadList();
+    saveStore();
     return;
   }
   if (activeId === id) {
@@ -324,7 +409,7 @@ async function send() {
         try { evt = JSON.parse(line); } catch { continue; }
         if (evt.type === "meta") {
           accumulateTokex(thread, evt.tokex || evt.meter);
-          renderTokexPanel(thread);
+          renderTokexPanel();
           saveStore();
         } else if (evt.type === "delta") {
           if (!bubble) {
@@ -433,16 +518,20 @@ document.getElementById("sideKeySave")?.addEventListener("click", () => handleKe
   if (stored?.threads?.length) {
     threads = stored.threads.map((t) => ({
       ...t,
-      tokex: t.tokex || emptyTokex(),
+      tokex: normalizeTokex(t.tokex),
       messages: t.messages || [{ role: "assistant", content: WELCOME }],
     }));
     activeId = stored.activeId && threads.some((t) => t.id === stored.activeId)
       ? stored.activeId
       : threads[0].id;
+    lifetime = stored.lifetime
+      ? normalizeTokex(stored.lifetime)
+      : rebuildLifetimeFromThreads();
   } else {
     const th = newThread();
     threads = [th];
     activeId = th.id;
+    lifetime = emptyTokex();
   }
   renderThreadList();
   selectThread(activeId);

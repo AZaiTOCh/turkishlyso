@@ -109,7 +109,8 @@ select, input[type="text"], input[type="password"] {
 .tokex-sub { color: #71717a; font-size: 0.72rem; letter-spacing: 0.04em; margin-bottom: 8px; }
 .tokex-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; font-size: 0.82rem; color: #18181b; }
 .tokex-grid .k { display: block; color: #71717a; font-size: 0.68rem; letter-spacing: 0.06em; margin-bottom: 2px; }
-.tokex-last { margin-top: 8px; color: #71717a; font-size: 0.72rem; }
+.tokex-last, .tokex-meta, .tokex-sends { margin-top: 8px; color: #71717a; font-size: 0.72rem; line-height: 1.45; }
+.tokex-sends { display: flex; flex-direction: column; gap: 2px; }
 .messages { overflow: auto; padding: 28px 24px 40px; display: flex; flex-direction: column; gap: 18px; background: #fff; }
 .bubble {
   max-width: min(720px, 92%); padding: 0; border-radius: 0;
