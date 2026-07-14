@@ -2,21 +2,25 @@
 
 Factual release ledger. Updated when a version is committed.
 **Measured** = real TOKEX/Agatha numbers. **Unknown** = not invented.
+**DoP** = Duration of Process (approx. wall-clock window for that version’s work, US Eastern).
 
 ---
 
 ## v0.0 → first spark (pre-public / prototype)
+- **DoP:** unknown (pre-repo prototype; before first git commit)
 - Idea: a local “token optimizer” you run like a small app, not a giant SaaS.
 - **Neologism born: TOKEX** (Token Expenditure) — honest before/after token accounting.
 - First Split-Execution sketch: shrink what you *send* to an LLM without pretending magic.
 
 ## v0.1 — engine boots
+- **DoP:** Jul 13, 2026 · ~2:56 AM – ~11:00 AM EST (first commit through eve of formal v0.2 packaging)
 - **Innovative:** local FastAPI daemon + chat UI; optimize path before the model sees your prompt/files.
 - **Tokopt cylinders (early):** ingest → LCS packaging → early TOKEX meter → provider dispatch.
 - API key wizard (Gemini / OpenRouter).
 - Argus beginnings (provider health / failover thinking).
 
 ## v0.2 — product UI + cylinder concert (shipped line through `b108761`)
+- **DoP:** Jul 13, 2026 · ~11:13 AM – ~2:21 PM EST (v0.2 packaging ship through multi-image + attachment thumbs)
 ### Agents / agentics
 - **Argus** — live preflight; OpenRouter cools down *one busy model*, not the whole provider.
 - **Mumblz** — History chat naming agent (settled on **2 lowercase words**, no vowel-stripping).
@@ -41,6 +45,7 @@ Factual release ledger. Updated when a version is committed.
 - **Unknown server-side** (no Agatha yet in v0.2). UI lifetime % lived in browser localStorage only.
 
 ## v0.3.0 — fidelity + hive agents (this commit)
+- **DoP:** Jul 14, 2026 · ~4:34 AM – ~5:42 AM EST (fidelity/agents/popup plan through v0.3.0 merge `dc7048d`)
 ### Theme
 Everyday-user simplicity + **100% loyalty default** + factual agent ledger. Package version **0.3.0**.
 
@@ -76,3 +81,10 @@ Paid you added (Claude → ChatGPT) first → **Gemini free first** among unpaid
 
 ### Not in this commit (parked)
 - Live multi-user NeoBorg TOKEX CLOCK network broadcast (local ledger ready).
+
+---
+
+## DoP note for future entries
+When committing a new version, add one line:
+`- **DoP:** Mon DD, YYYY · ~H:MM AM/PM – ~H:MM AM/PM EST`
+Use wall-clock work window for that version slice, not vague “all of history.”
