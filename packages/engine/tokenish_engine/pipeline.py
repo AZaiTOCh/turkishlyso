@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from tokenish_engine.agents.agatha import archive_rainman_brief
+from tokenish_engine.agents.mrs_brown import intake_local_savings
+from tokenish_engine.agents.neoborg import cross_vet_and_record
+from tokenish_engine.agents.rainman import interrogate_run
 from tokenish_engine.compile import (
     assemble_envelope,
     baseline_prompt,
@@ -19,9 +23,63 @@ from tokenish_engine.config import settings
 from tokenish_engine.ingest import IngestResult, ingest_file, merge_ingests
 from tokenish_engine.meters import compute_tokex
 from tokenish_engine.meters.tokens import count_tokens
-from tokenish_engine.models import CompileResult
+from tokenish_engine.models import CompileResult, TokexReport
 from tokenish_engine.retrieve import gate_document
 from tokenish_engine.vision import maybe_pack
+
+
+def _agent_seal(
+    *,
+    envelope: str,
+    nodes: dict,
+    tokex: TokexReport,
+    data_type: str,
+    image_b64: str | None,
+    image_mime: str | None,
+    images: list,
+    stages: list[str],
+    pxpipe_applied: bool,
+    its_meta: dict,
+    kiosk_blocked: bool,
+    attachment_warning: str | None,
+    fidelity_mode: str,
+) -> CompileResult:
+    rainman = interrogate_run(
+        stages=stages,
+        tokex=tokex.model_dump(),
+        its_meta=its_meta,
+        attachment_warning=attachment_warning,
+        fidelity_mode=fidelity_mode,
+    )
+    agatha = archive_rainman_brief(rainman)
+    brown = intake_local_savings(
+        {
+            "tokex": rainman.get("tokex"),
+            "rainman": rainman,
+            "cylinders": rainman.get("cylinders"),
+        }
+    )
+    neo = cross_vet_and_record(brown.get("handoff") if brown.get("accepted") else None)
+    return CompileResult(
+        envelope=envelope,
+        nodes=nodes,
+        meter=tokex,
+        tokex=tokex,
+        data_type=data_type,
+        image_b64=image_b64,
+        image_mime=image_mime,
+        images=images,
+        stages=stages,
+        pxpipe_applied=pxpipe_applied,
+        its=its_meta,
+        kiosk_blocked=kiosk_blocked,
+        attachment_warning=attachment_warning,
+        rainman=rainman,
+        agatha=agatha,
+        mrs_brown=brown,
+        neoborg=neo,
+        fidelity_mode=fidelity_mode,
+    )
 
 
 def optimize(
@@ -115,6 +173,10 @@ def optimize(
                 stages.append("faiss_mib")
     elif use_its and wants_full_document_context(prompt) and raw_doc and not follow_mode:
         stages.append("its_skipped_assess")
+    elif not use_its and raw_doc:
+        stages.append("its_disabled_consent")
+
+    fidelity_mode = "loyalty" if not use_its else "savings_consent"
 
     px_applied = False
     px_surcharge = 0
@@ -158,10 +220,9 @@ def optimize(
             stages=stages,
             fact_notes=["short prompt — optimizer skipped (nothing to compress)"],
         )
-        return CompileResult(
+        return _agent_seal(
             envelope=envelope,
             nodes=nodes,
-            meter=tokex,
             tokex=tokex,
             data_type=data_type,
             image_b64=image_b64,
@@ -169,9 +230,10 @@ def optimize(
             images=images,
             stages=stages,
             pxpipe_applied=False,
-            its=its_meta,
+            its_meta=its_meta,
             kiosk_blocked=kiosk_blocked,
             attachment_warning=attachment_warning,
+            fidelity_mode=fidelity_mode,
         )
 
     if kiosk_blocked:
@@ -267,8 +329,10 @@ def optimize(
             stages.append("verbatim_fallback")
 
     vision_note = ""
+    vision_image_tokens = 0
     if images and not px_applied:
-        vision_note = f" + vision_images({len(images)})"
+        vision_image_tokens = len(images) * int(settings.vision_tokens_per_image)
+        vision_note = f" + vision_images({len(images)}×{settings.vision_tokens_per_image})"
         stages.append(f"vision_images_{len(images)}")
 
     tokex = compute_tokex(
@@ -276,20 +340,22 @@ def optimize(
         optimized_text=envelope,
         stages=stages,
         pxpipe_image_tokens=px_surcharge if px_applied else 0,
+        vision_image_tokens=vision_image_tokens,
+        baseline_vision_tokens=vision_image_tokens if not px_applied else 0,
         fact_notes=[
-            "TOTAL_TOKEX = tokens(naive prompt + raw attachment)",
+            "TOTAL_TOKEX = tokens(naive prompt + raw attachment) + billed vision",
             "TOKEX_THIS_RUN = tokens(optimized envelope)"
             + (f" + pxpipe_image({px_surcharge})" if px_surcharge and px_applied else "")
             + vision_note,
             "SAVED_TOKEX = max(0, TOTAL_TOKEX - TOKEX_THIS_RUN)",
+            "vision billed equally on before/after unless packing truly shrinks text",
             *([attachment_warning] if attachment_warning else []),
         ],
     )
 
-    return CompileResult(
+    return _agent_seal(
         envelope=envelope,
         nodes=nodes,
-        meter=tokex,
         tokex=tokex,
         data_type=data_type,
         image_b64=image_b64,
@@ -297,7 +363,8 @@ def optimize(
         images=images,
         stages=stages,
         pxpipe_applied=px_applied,
-        its=its_meta,
+        its_meta=its_meta,
         kiosk_blocked=kiosk_blocked,
         attachment_warning=attachment_warning,
+        fidelity_mode=fidelity_mode,
     )

@@ -458,8 +458,80 @@ textarea {
 .modal-card input {
   border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: #fff;
 }
-.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
-.tiny { font-size: 0.75rem; color: var(--muted); }
+.consent-row {
+  display: flex; gap: 8px; align-items: flex-start;
+  color: var(--muted); font-size: 0.78rem; line-height: 1.35;
+}
+.consent-row input { margin-top: 3px; }
+.slot-head {
+  display: flex; align-items: center; gap: 4px; position: relative;
+}
+.slot-head .section-label { flex: 1; margin: 8px 0 4px; }
+.slot-help-menu {
+  display: none;
+  position: absolute;
+  right: 0; top: 100%;
+  z-index: 25;
+  width: min(220px, 90vw);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(24,24,27,0.12);
+  padding: 10px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+.slot-help-menu.open { display: block; }
+.modal-wide {
+  width: min(560px, 96vw);
+  max-height: min(90vh, 900px);
+  overflow: auto;
+}
+.modal-lead { color: var(--muted); font-size: 0.92rem; margin: 0 0 10px; }
+.key-slot {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+  background: #fafafa;
+}
+.key-slot-top {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 6px;
+}
+.key-slot-top strong { font-size: 0.92rem; }
+.key-link { font-size: 0.78rem; color: #002868; margin-left: auto; }
+.key-hint {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+.key-badge {
+  font-size: 0.66rem;
+  border-radius: 999px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  text-transform: lowercase;
+}
+.key-badge.free { background: #dcfce7; border-color: #86efac; color: #14532d; }
+.key-badge.paid { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+.key-badge.soon { background: #f4f4f5; }
+.stack-box { margin: 12px 0; }
+.stack-box label { display: block; font-size: 0.85rem; margin-bottom: 4px; }
+.dont-show {
+  display: flex; gap: 8px; align-items: center;
+  color: var(--muted); font-size: 0.78rem; margin-top: 8px;
+}
+.modal-card input[type="password"],
+.modal-card input[type="text"] {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: #fff;
+}
 aside input[type="password"], aside select#model {
   width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 8px; background: #fff;
 }

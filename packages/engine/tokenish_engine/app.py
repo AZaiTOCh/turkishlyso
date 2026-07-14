@@ -21,7 +21,9 @@ from tokenish_engine.retrieve import memtrove_available
 from tokenish_engine.settings_store import (
     apply_saved_keys_to_environ,
     load_keys,
+    load_prefs,
     save_keys,
+    save_prefs,
     tokenish_home,
 )
 
@@ -45,6 +47,12 @@ class KeysPayload(BaseModel):
     GEMINI_API_KEY: str | None = None
     GOOGLE_API_KEY: str | None = None
     OPENROUTER_API_KEY: str | None = None
+    OPENAI_API_KEY: str | None = None
+    ANTHROPIC_API_KEY: str | None = None
+    GROQ_API_KEY: str | None = None
+    PERPLEXITY_API_KEY: str | None = None
+    fallback_preference: str | None = None
+    hide_key_wizard: bool | None = None
 
 
 class MumblzPayload(BaseModel):
@@ -85,9 +93,19 @@ async def health() -> dict[str, Any]:
 async def get_key_status() -> dict[str, Any]:
     apply_saved_keys_to_environ(overwrite=True)
     keys = load_keys()
-    return {
+    prefs = load_prefs()
+    has = {
         "gemini": bool(keys.get("GEMINI_API_KEY") or keys.get("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")),
         "openrouter": bool(keys.get("OPENROUTER_API_KEY") or os.getenv("OPENROUTER_API_KEY")),
+        "openai": bool(keys.get("OPENAI_API_KEY") or keys.get("GPT_TOKENISH") or os.getenv("OPENAI_API_KEY")),
+        "anthropic": bool(keys.get("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")),
+        "groq": bool(keys.get("GROQ_API_KEY") or os.getenv("GROQ_API_KEY")),
+        "perplexity": bool(keys.get("PERPLEXITY_API_KEY") or os.getenv("PERPLEXITY_API_KEY")),
+    }
+    return {
+        **has,
+        "has": has,
+        "prefs": prefs,
         "home": str(tokenish_home()),
         "version": __version__,
     }
@@ -95,32 +113,61 @@ async def get_key_status() -> dict[str, Any]:
 
 @app.post("/settings/keys")
 async def set_keys(payload: KeysPayload):
-    data = {k: v for k, v in payload.model_dump().items() if v and str(v).strip()}
+    raw = payload.model_dump()
     allowed = {
         "GEMINI_API_KEY",
         "GOOGLE_API_KEY",
         "OPENROUTER_API_KEY",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "GROQ_API_KEY",
+        "PERPLEXITY_API_KEY",
     }
-    data = {k: str(v).strip() for k, v in data.items() if k in allowed}
-    if not data:
-        return JSONResponse({"ok": False, "error": "paste a Gemini or OpenRouter key"}, status_code=400)
-    save_keys(data)
-    for key, value in data.items():
-        os.environ[key] = value
-    try:
-        routing_path = Path(__file__).resolve().parent / "routing.json"
-        routing = json.loads(routing_path.read_text(encoding="utf-8"))
-        providers = routing.setdefault("providers", {})
-        if data.get("GEMINI_API_KEY") or data.get("GOOGLE_API_KEY"):
-            providers.setdefault("gemini", {})["is_active"] = True
-            providers["gemini"].pop("error", None)
-        if data.get("OPENROUTER_API_KEY"):
-            providers.setdefault("openrouter", {})["is_active"] = True
-            providers["openrouter"].pop("error", None)
-        routing_path.write_text(json.dumps(routing, indent=2) + "\n", encoding="utf-8")
-    except Exception:
-        pass
-    return {"ok": True, "home": str(tokenish_home()), "saved": list(data.keys())}
+    data = {k: str(v).strip() for k, v in raw.items() if k in allowed and v and str(v).strip()}
+    prefs_in = {}
+    if payload.fallback_preference is not None:
+        prefs_in["fallback_preference"] = payload.fallback_preference.strip()
+    if payload.hide_key_wizard is not None:
+        prefs_in["hide_key_wizard"] = bool(payload.hide_key_wizard)
+    if prefs_in:
+        save_prefs(prefs_in)
+        if prefs_in.get("fallback_preference"):
+            try:
+                from tokenish_engine.config import settings as _settings
+                object.__setattr__(_settings, "fallback_preference", prefs_in["fallback_preference"])
+            except Exception:
+                pass
+    existing = load_keys()
+    if not data and not existing and not prefs_in:
+        return JSONResponse({"ok": False, "error": "paste at least one AI key"}, status_code=400)
+    if not data and not existing:
+        # prefs-only when no keys yet — still require a key for first-time use
+        if not prefs_in.get("hide_key_wizard"):
+            return JSONResponse({"ok": False, "error": "paste at least one AI key"}, status_code=400)
+    if data:
+        save_keys(data)
+        for key, value in data.items():
+            os.environ[key] = value
+        try:
+            routing_path = Path(__file__).resolve().parent / "routing.json"
+            routing = json.loads(routing_path.read_text(encoding="utf-8")) if routing_path.exists() else {}
+            providers = routing.setdefault("providers", {})
+            mapping = {
+                "gemini": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+                "openrouter": ("OPENROUTER_API_KEY",),
+                "openai": ("OPENAI_API_KEY",),
+                "anthropic": ("ANTHROPIC_API_KEY",),
+                "groq": ("GROQ_API_KEY",),
+                "perplexity": ("PERPLEXITY_API_KEY",),
+            }
+            for pname, key_names in mapping.items():
+                if any(data.get(k) for k in key_names):
+                    providers.setdefault(pname, {})["is_active"] = True
+                    providers[pname].pop("error", None)
+            routing_path.write_text(json.dumps(routing, indent=2) + "\n", encoding="utf-8")
+        except Exception:
+            pass
+    return {"ok": True, "home": str(tokenish_home()), "saved": list(data.keys()), "prefs": load_prefs()}
 
 
 @app.get("/providers")
@@ -190,16 +237,19 @@ async def chat_endpoint(
     history: str | None = Form(None),
     page_range: str | None = Form(None),
     stream: bool = Form(False),
+    enable_its: str | None = Form("false"),
     files: list[UploadFile] | None = File(None),
 ):
     apply_saved_keys_to_environ()
     uploads = await _read_uploads(files)
+    its_flag = str(enable_its or "").strip().lower() in {"1", "true", "yes", "on"}
     compiled = optimize(
         prompt=prompt,
         target_engine=target_engine,
         model=model,
         files=uploads,
         page_range=page_range,
+        enable_its=its_flag,
     )
     hist = compress_history(_parse_history(history))
     prov = resolve_provider(provider, model, target_engine)
@@ -222,6 +272,13 @@ async def chat_endpoint(
                 "data_type": compiled.data_type,
                 "images_sent": len(compiled.images or ([] if not compiled.image_b64 else [1])),
                 "attachment_warning": compiled.attachment_warning,
+                "rainman": compiled.rainman,
+                "agatha": compiled.agatha,
+                "fidelity_mode": compiled.fidelity_mode,
+                "neoborg": {
+                    "broadcast": (compiled.neoborg or {}).get("broadcast"),
+                    "clock_preview": (compiled.neoborg or {}).get("clock_preview"),
+                },
             }
             yield json.dumps(meta) + "\n"
             if compiled.kiosk_blocked:

@@ -13,7 +13,7 @@ build/
 .ruff_cache/
 apps/desktop/dist/
 packages/engine/.venv/
-*.log
+routing.json
+**/routing.json
 
-.worktrees/
 

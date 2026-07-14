@@ -49,6 +49,11 @@ class CompileResult(BaseModel):
     its: dict[str, Any] = Field(default_factory=dict)
     kiosk_blocked: bool = False
     attachment_warning: str | None = None
+    rainman: dict[str, Any] = Field(default_factory=dict)
+    agatha: dict[str, Any] = Field(default_factory=dict)
+    mrs_brown: dict[str, Any] = Field(default_factory=dict)
+    neoborg: dict[str, Any] = Field(default_factory=dict)
+    fidelity_mode: str = "loyalty"
 
 
 class ChatMessage(BaseModel):

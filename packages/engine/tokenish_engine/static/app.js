@@ -11,7 +11,7 @@ const threadListEl = document.getElementById("threadList");
 const STORE_KEY = "tokenish.threads.v2";
 const MUMBLZ_REV = "lowercase-titles-v1";
 const WELCOME = "Attach a pdf, docx, xlsx, csv, or image. tokenish optimizes every send automatically.";
-const MAX_VISION_IMAGES = 8;
+const MAX_VISION_IMAGES = 16;
 const MAX_ATTACH_FILES = 20;
 const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "webp", "gif", "bmp"]);
 
@@ -739,7 +739,7 @@ async function loadProviders() {
     providersEl.innerHTML = "";
     const modelSet = [];
     for (const p of data.providers || []) {
-      if (["openai", "anthropic"].includes(p.name)) continue;
+      // show all providers Argus returns
       const row = document.createElement("div");
       row.className = "provider";
       row.innerHTML = `<span><span class="dot ${p.available ? "ok" : "bad"}"></span>${p.name}</span><span style="color:var(--muted);font-size:0.75rem">${escapeHtml(p.detail || "")}</span>`;
@@ -785,6 +785,7 @@ async function send() {
   fd.append("provider", provider);
   fd.append("history", JSON.stringify(apiHistory(thread).slice(0, -1)));
   fd.append("stream", "true");
+  fd.append("enable_its", document.getElementById("allowIts")?.checked ? "true" : "false");
   const pageRange = document.getElementById("pageRange").value.trim();
   if (pageRange) fd.append("page_range", pageRange);
   for (const f of files) fd.append("files", f);
@@ -889,39 +890,75 @@ async function maybeShowKeyWizard() {
   try {
     const res = await fetch("/settings/keys");
     const data = await res.json();
-    if (data.gemini || data.openrouter) return;
+    fillKeyWizard(data);
+    if (data.prefs?.hide_key_wizard) return;
     modal.hidden = false;
   } catch {
     modal.hidden = false;
   }
 }
 
+function fillKeyWizard(data) {
+  const map = {
+    keyGemini: data.has?.gemini,
+    keyOpenRouter: data.has?.openrouter,
+    keyOpenAI: data.has?.openai,
+    keyAnthropic: data.has?.anthropic,
+    keyPerplexity: data.has?.perplexity,
+    keyGroq: data.has?.groq,
+  };
+  for (const [id, present] of Object.entries(map)) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    if (present) {
+      el.placeholder = "already saved — paste to replace";
+    }
+  }
+  if (data.prefs?.fallback_preference) {
+    const pref = document.getElementById("fallbackPref");
+    if (pref) pref.value = data.prefs.fallback_preference;
+  }
+}
+
 async function handleKeySave(fromModal) {
-  const gemini = (fromModal
-    ? document.getElementById("keyGemini")
-    : document.getElementById("sideKeyGemini")
-  ).value.trim();
-  const openrouter = (fromModal
-    ? document.getElementById("keyOpenRouter")
-    : document.getElementById("sideKeyOpenRouter")
-  ).value.trim();
   const msg = document.getElementById("keyModalMsg");
-  if (!gemini && !openrouter) {
-    showError("paste a Gemini or OpenRouter key");
-    if (msg) { msg.hidden = false; msg.textContent = "paste a Gemini or OpenRouter key"; }
+  const payload = fromModal
+    ? {
+        GEMINI_API_KEY: document.getElementById("keyGemini")?.value.trim() || "",
+        OPENROUTER_API_KEY: document.getElementById("keyOpenRouter")?.value.trim() || "",
+        OPENAI_API_KEY: document.getElementById("keyOpenAI")?.value.trim() || "",
+        ANTHROPIC_API_KEY: document.getElementById("keyAnthropic")?.value.trim() || "",
+        PERPLEXITY_API_KEY: document.getElementById("keyPerplexity")?.value.trim() || "",
+        GROQ_API_KEY: document.getElementById("keyGroq")?.value.trim() || "",
+        fallback_preference: document.getElementById("fallbackPref")?.value.trim() || "",
+        hide_key_wizard: !!document.getElementById("dontShowWizard")?.checked,
+      }
+    : {
+        GEMINI_API_KEY: document.getElementById("sideKeyGemini")?.value.trim() || "",
+        OPENROUTER_API_KEY: document.getElementById("sideKeyOpenRouter")?.value.trim() || "",
+      };
+
+  const hasAny = Object.entries(payload).some(
+    ([k, v]) => k.endsWith("_KEY") || k === "OPENAI_API_KEY" || k === "ANTHROPIC_API_KEY" || k === "GROQ_API_KEY" || k === "PERPLEXITY_API_KEY" || k === "GEMINI_API_KEY" || k === "OPENROUTER_API_KEY"
+      ? !!v
+      : false,
+  );
+  // Allow save of prefs alone from modal if keys already exist.
+  if (fromModal && !hasAny) {
+    // still try — server accepts prefs-only when a key already saved
+  } else if (!fromModal && !payload.GEMINI_API_KEY && !payload.OPENROUTER_API_KEY) {
+    showError("paste at least one key");
     return;
   }
+
   try {
-    const data = await saveKeys({
-      GEMINI_API_KEY: gemini,
-      OPENROUTER_API_KEY: openrouter,
-    });
+    const data = await saveKeys(payload);
     if (fromModal) document.getElementById("keyModal").hidden = true;
     if (msg) msg.hidden = true;
     showError("");
     const th = activeThread();
     if (th) {
-      const note = `Keys saved (${(data.saved || []).join(", ") || "ok"}). Try sending again.`;
+      const note = `connections saved${data.saved?.length ? ` (${data.saved.join(", ")})` : ""}. you can keep chatting.`;
       addBubble("assistant", note);
       th.messages.push({ role: "assistant", content: note });
       saveStore();
@@ -938,6 +975,43 @@ document.getElementById("keySkip")?.addEventListener("click", () => {
 });
 document.getElementById("keySave")?.addEventListener("click", () => handleKeySave(true));
 document.getElementById("sideKeySave")?.addEventListener("click", () => handleKeySave(false));
+document.getElementById("openKeyWizard")?.addEventListener("click", async () => {
+  const modal = document.getElementById("keyModal");
+  try {
+    const res = await fetch("/settings/keys");
+    fillKeyWizard(await res.json());
+  } catch { /* ignore */ }
+  if (modal) modal.hidden = false;
+});
+
+document.getElementById("addCustomKey")?.addEventListener("click", () => {
+  const wrap = document.getElementById("customKeySlots");
+  if (!wrap) return;
+  const id = `customKey_${Date.now()}`;
+  const slot = document.createElement("div");
+  slot.className = "key-slot";
+  slot.innerHTML =
+    `<div class="key-slot-top"><strong>your AI</strong></div>` +
+    `<p class="key-hint">Name the provider and paste its key. Advanced — optional.</p>` +
+    `<input type="text" placeholder="provider name (e.g. my-llm)" class="custom-prov" />` +
+    `<input type="password" id="${id}" placeholder="paste key" autocomplete="off" style="margin-top:6px" />`;
+  wrap.appendChild(slot);
+});
+
+document.querySelectorAll(".slot-help-btn").forEach((btn) => {
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const id = btn.getAttribute("data-help");
+    const menu = document.getElementById(`help-${id}`);
+    document.querySelectorAll(".slot-help-menu.open").forEach((el) => {
+      if (el !== menu) el.classList.remove("open");
+    });
+    menu?.classList.toggle("open");
+  });
+});
+document.addEventListener("click", () => {
+  document.querySelectorAll(".slot-help-menu.open").forEach((el) => el.classList.remove("open"));
+});
 
 (function init() {
   const stored = loadStore();
@@ -964,6 +1038,5 @@ document.getElementById("sideKeySave")?.addEventListener("click", () => handleKe
   fillModels(DEFAULT_MODELS);
   loadProviders();
   maybeShowKeyWizard();
-  // Mumblz: force re-title when agent revision changes.
   retitleAllThreads({ force: true });
 })();

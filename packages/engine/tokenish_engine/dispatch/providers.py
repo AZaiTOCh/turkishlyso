@@ -1,8 +1,8 @@
 """
 Provider dispatch + Argus-style fallback chain.
 
-Order: Gemini (primary + alt models) → OpenRouter
-OpenAI / Anthropic removed from the product surface.
+Auto order (skip missing keys): Claude → ChatGPT → Gemini → OpenRouter free
+→ Groq 70b/8b → Perplexity. Gemini leads the unpaid/free path.
 """
 
 from __future__ import annotations
@@ -15,7 +15,15 @@ from typing import Any, AsyncIterator
 
 import httpx
 
-from tokenish_engine.config import gemini_key, groq_key, openrouter_key, settings
+from tokenish_engine.config import (
+    anthropic_key,
+    gemini_key,
+    groq_key,
+    openai_key,
+    openrouter_key,
+    perplexity_key,
+    settings,
+)
 from tokenish_engine.dispatch.argus import run_preflight
 from tokenish_engine.models import ProviderStatus
 
@@ -174,6 +182,14 @@ def resolve_model(provider: str, model: str | None, target_engine: str) -> str:
         return settings.openrouter_free_model if not m or "gpt" in m.lower() or m.startswith("gemini") else m
     if provider == "openai":
         return settings.openai_primary_model
+    if provider == "anthropic":
+        return settings.anthropic_model
+    if provider == "groq":
+        if "8b" in m.lower() or "instant" in m.lower():
+            return settings.groq_fast_model
+        return settings.groq_primary_model
+    if provider == "perplexity":
+        return settings.perplexity_model
     return m or target_engine or settings.gemini_model
 
 
@@ -185,12 +201,96 @@ def _provider_has_key(name: str) -> bool:
     if name == "openrouter":
         return bool(openrouter_key())
     if name == "perplexity":
-        return bool(settings.perplexity_api_key or os.environ.get("PERPLEXITY_API_KEY"))
+        return bool(perplexity_key())
     if name == "openai":
-        return False  # removed from product surface
+        return bool(openai_key())
     if name == "anthropic":
-        return False  # removed from product surface
+        return bool(anthropic_key())
     return False
+
+
+def _pref_list() -> list[str]:
+    raw = (settings.fallback_preference or "").strip()
+    if not raw:
+        return ["anthropic", "openai", "gemini", "openrouter", "groq", "perplexity"]
+    return [p.strip().lower() for p in raw.split(",") if p.strip()]
+
+
+def _fallback_chain(provider: str, model: str) -> list[tuple[str, str]]:
+    """
+    Auto stack (everyday explanation):
+    1) Paid APIs you added (Claude, then ChatGPT) go first.
+    2) Free stack: Gemini 3.5 Flash first (large free allowance),
+       then OpenRouter free models, then Groq 70b → 8b, then Perplexity.
+    Explicit provider selection still jumps that provider to the front when usable.
+    """
+    if provider == "gemini" or (model or "").startswith("gemini"):
+        provider, model = "gemini", settings.gemini_model
+    if provider == "auto":
+        provider, model = "gemini", settings.gemini_model
+
+    chain: list[tuple[str, str]] = []
+
+    def add(prov: str, mdl: str) -> None:
+        item = (prov, mdl)
+        if item in chain:
+            return
+        if not _provider_usable(prov):
+            return
+        if _model_on_cooldown(prov, mdl):
+            return
+        chain.append(item)
+
+    for name in _pref_list():
+        if name == "anthropic":
+            add("anthropic", settings.anthropic_model)
+        elif name == "openai":
+            add("openai", settings.openai_primary_model)
+        elif name == "gemini":
+            add("gemini", settings.gemini_model)
+        elif name == "openrouter":
+            if openrouter_key():
+                for mid in _openrouter_roster_models()[:10]:
+                    add("openrouter", mid)
+        elif name == "groq":
+            add("groq", settings.groq_primary_model)  # 70b
+            add("groq", settings.groq_fast_model)  # 8b
+        elif name == "perplexity":
+            add("perplexity", settings.perplexity_model)
+
+    # Always ensure Gemini appears in free path if keyed and somehow missed.
+    add("gemini", settings.gemini_model)
+
+    if provider not in {"auto"} and _provider_usable(provider):
+        if provider == "gemini":
+            first = ("gemini", settings.gemini_model)
+        elif provider == "groq":
+            first = ("groq", model if model else settings.groq_primary_model)
+        elif provider == "anthropic":
+            first = ("anthropic", settings.anthropic_model)
+        elif provider == "openai":
+            first = ("openai", settings.openai_primary_model)
+        elif provider == "perplexity":
+            first = ("perplexity", settings.perplexity_model)
+        else:
+            first = (provider, model or settings.openrouter_free_model)
+        chain = [first] + [x for x in chain if x != first]
+
+    if chain:
+        return chain
+    if openrouter_key():
+        return [("openrouter", settings.openrouter_free_model)]
+    return [("gemini", settings.gemini_model)]
+
+
+async def preflight() -> list[ProviderStatus]:
+    """Argus live health + key roster."""
+    statuses, _ = await run_preflight()
+    return statuses
+
+
+async def preflight_full() -> tuple[list[ProviderStatus], dict]:
+    return await run_preflight()
 
 
 def _provider_active(name: str) -> bool:
@@ -198,26 +298,12 @@ def _provider_active(name: str) -> bool:
         return False
     try:
         data = json.loads(_ROUTING_PATH.read_text(encoding="utf-8"))
-        prov = data.get("providers", {}).get(name, {})
-        if "is_active" in prov:
-            return bool(prov["is_active"])
+        provid = data.get("providers", {}).get(name, {})
+        if "is_active" in provid:
+            return bool(provid["is_active"])
     except Exception:
         pass
     return True
-
-
-def _provider_ready(name: str) -> bool:
-    return _provider_active(name)
-
-
-async def preflight() -> list[ProviderStatus]:
-    """Argus live health + key roster (Groq 70B/8B, Gemini 3.5, OpenRouter free)."""
-    statuses, _ = await run_preflight()
-    return statuses
-
-
-async def preflight_full() -> tuple[list[ProviderStatus], dict]:
-    return await run_preflight()
 
 
 def _mark_provider_error(name: str, err: str, *, model: str | None = None) -> None:
@@ -343,49 +429,6 @@ def _user_content(
             )
         return content
     return envelope
-
-
-def _fallback_chain(provider: str, model: str) -> list[tuple[str, str]]:
-    # Force Gemini requests onto gemini-3.5-flash only (never other Gemini IDs).
-    if provider == "gemini" or (model or "").startswith("gemini"):
-        provider, model = "gemini", settings.gemini_model
-    if provider == "auto":
-        provider, model = "gemini", settings.gemini_model
-
-    chain: list[tuple[str, str]] = []
-    if _provider_usable("gemini") and not _model_on_cooldown("gemini", settings.gemini_model):
-        chain.append(("gemini", settings.gemini_model))
-
-    # Expand OpenRouter into many free chat models (skip cooled-down ones).
-    if openrouter_key():
-        for mid in _openrouter_roster_models()[:10]:
-            item = ("openrouter", mid)
-            if item not in chain:
-                chain.append(item)
-
-    # Honor explicit non-auto request first if usable
-    if provider not in {"auto", "gemini"} and _provider_usable(provider):
-        first = (provider, model)
-        chain = [first] + [x for x in chain if x != first]
-
-    if provider == "gemini" and ("gemini", settings.gemini_model) in chain:
-        # keep gemini first
-        chain = [("gemini", settings.gemini_model)] + [x for x in chain if x[0] != "gemini"]
-
-    seen: set[tuple[str, str]] = set()
-    uniq: list[tuple[str, str]] = []
-    for item in chain:
-        if item in seen:
-            continue
-        if _model_on_cooldown(item[0], item[1]):
-            continue
-        seen.add(item)
-        uniq.append(item)
-    if uniq:
-        return uniq
-    if openrouter_key():
-        return [("openrouter", settings.openrouter_free_model)]
-    return [("gemini", settings.gemini_model)]
 
 
 async def chat_complete(
@@ -527,9 +570,13 @@ def _api_key(provider: str) -> str | None:
     if provider == "openrouter":
         return openrouter_key()
     if provider == "perplexity":
-        return settings.perplexity_api_key or os.environ.get("PERPLEXITY_API_KEY")
+        return perplexity_key()
     if provider == "gemini":
         return gemini_key()
+    if provider == "openai":
+        return openai_key()
+    if provider == "anthropic":
+        return anthropic_key()
     return None
 
 
@@ -729,8 +776,9 @@ async def _anthropic_chat(
     image_mime: str | None,
     images: list[dict[str, str]] | None = None,
 ) -> str:
-    if not settings.anthropic_api_key:
+    if not settings.anthropic_api_key and not anthropic_key():
         raise RuntimeError("ANTHROPIC_API_KEY missing")
+    key = anthropic_key() or settings.anthropic_api_key
     messages: list[dict[str, Any]] = []
     for h in history:
         messages.append({"role": h["role"], "content": h["content"]})
@@ -756,7 +804,7 @@ async def _anthropic_chat(
         r = await client.post(
             "https://api.anthropic.com/v1/messages",
             headers={
-                "x-api-key": settings.anthropic_api_key,
+                "x-api-key": key,
                 "anthropic-version": "2023-06-01",
                 "content-type": "application/json",
             },

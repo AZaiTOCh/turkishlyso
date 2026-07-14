@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>tokenish</title>
   <link href="https://fonts.googleapis.com/css2?family=Arimo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/ui/styles.css?v=0.2.10-attach-thumbs" />
+  <link rel="stylesheet" href="/ui/styles.css?v=0.3.0" />
 </head>
 <body>
   <div class="app">
     <aside class="sidebar history-sidebar">
       <div class="brand">
         <h1>tokenish</h1>
-        <span>token use optimizer · v0.2</span>
+        <span>token use optimizer · v0.3</span>
       </div>
       <button class="btn primary full new-chat" id="newChat" type="button">new chat</button>
       <div class="section-label">history</div>
@@ -66,6 +66,10 @@
       <div class="composer">
         <div class="attachments" id="attachments"></div>
         <div class="error" id="error" hidden></div>
+        <label class="consent-row" title="Keep this off unless you want tokenish to drop less-relevant document chunks to save tokens.">
+          <input type="checkbox" id="allowIts" />
+          <span>allow tokenish to skip less-relevant document chunks (saves more tokens; keep off for maximum accuracy)</span>
+        </label>
         <div class="row">
           <button class="btn" id="attachBtn">attach</button>
           <input id="fileInput" type="file" multiple hidden accept=".pdf,.docx,.doc,.xlsx,.xls,.csv,.txt,.md,.json,.png,.jpg,.jpeg,.webp" />
@@ -76,45 +80,164 @@
     </main>
 
     <aside class="sidebar settings-sidebar">
-      <div class="section-label">provider</div>
+      <div class="slot-head">
+        <div class="section-label">connection</div>
+        <button class="menu-btn slot-help-btn" type="button" data-help="connection" title="what is this?" aria-label="connection help">⋮</button>
+        <div class="slot-help-menu" id="help-connection">
+          Auto picks the next working AI for you. Claude or ChatGPT go first if you added their keys. Otherwise Gemini free is preferred, then OpenRouter free models, then Groq, then Perplexity.
+        </div>
+      </div>
       <select id="provider">
-        <option value="auto">auto</option>
+        <option value="auto">auto (recommended)</option>
         <option value="gemini">gemini</option>
         <option value="openrouter">openrouter</option>
         <option value="groq">groq</option>
+        <option value="anthropic">claude</option>
+        <option value="openai">chatgpt</option>
+        <option value="perplexity">perplexity</option>
       </select>
-      <div class="section-label">model</div>
+
+      <div class="slot-head">
+        <div class="section-label">model</div>
+        <button class="menu-btn slot-help-btn" type="button" data-help="model" title="what is this?" aria-label="model help">⋮</button>
+        <div class="slot-help-menu" id="help-model">
+          The specific AI brain. With Gemini we always use gemini-3.5-flash. Groq offers a larger 70b model and a faster 8b model.
+        </div>
+      </div>
       <select id="model">
         <option value="gemini-3.5-flash">gemini-3.5-flash</option>
         <option value="openrouter/free">openrouter/free</option>
+        <option value="llama-3.3-70b-versatile">groq 70b</option>
+        <option value="llama-3.1-8b-instant">groq 8b</option>
       </select>
-      <div class="section-label">API keys</div>
+
+      <div class="slot-head">
+        <div class="section-label">API keys</div>
+        <button class="menu-btn slot-help-btn" type="button" data-help="keys" title="what is this?" aria-label="keys help">⋮</button>
+        <div class="slot-help-menu" id="help-keys">
+          An API key is a private passcode that lets tokenish talk to an AI for you. You only need one. Open Connections at the top to add more with signup links.
+        </div>
+      </div>
+      <button class="btn full" id="openKeyWizard" type="button">manage connections…</button>
       <label class="tiny">Gemini</label>
-      <input id="sideKeyGemini" type="password" placeholder="GEMINI_API_KEY" autocomplete="off" />
+      <input id="sideKeyGemini" type="password" placeholder="paste gemini key" autocomplete="off" />
       <label class="tiny">OpenRouter</label>
-      <input id="sideKeyOpenRouter" type="password" placeholder="OPENROUTER_API_KEY" autocomplete="off" />
+      <input id="sideKeyOpenRouter" type="password" placeholder="paste openrouter key" autocomplete="off" />
       <button class="btn" id="sideKeySave" type="button">save keys</button>
-      <div class="section-label">status</div>
+
+      <div class="slot-head">
+        <div class="section-label">status</div>
+        <button class="menu-btn slot-help-btn" type="button" data-help="status" title="what is this?" aria-label="status help">⋮</button>
+        <div class="slot-help-menu" id="help-status">
+          Green means that AI is ready. Grey means it is unavailable or waiting. Tokenish will auto-switch if one gets busy.
+        </div>
+      </div>
       <div class="provider-list" id="providers"></div>
-      <div class="section-label">pdf page range</div>
-      <input id="pageRange" type="text" placeholder="e.g. 12-15" />
+
+      <div class="slot-head">
+        <div class="section-label">pdf page range</div>
+        <button class="menu-btn slot-help-btn" type="button" data-help="pages" title="what is this?" aria-label="page range help">⋮</button>
+        <div class="slot-help-menu" id="help-pages">
+          Optional. Example: 12-15 means only send those PDF pages. Leave blank to send the whole PDF (safer for accuracy; may use more tokens).
+        </div>
+      </div>
+      <input id="pageRange" type="text" placeholder="e.g. 12-15 (optional)" />
     </aside>
   </div>
+
   <div id="keyModal" class="modal" hidden>
-    <div class="modal-card">
-      <h2>set up API keys</h2>
-      <p>Paste Gemini and/or OpenRouter. Saved under <code>~/.tokenish</code>.</p>
-      <label>Gemini API key</label>
-      <input id="keyGemini" type="password" placeholder="GEMINI_API_KEY" autocomplete="off" />
-      <label>OpenRouter key (optional)</label>
-      <input id="keyOpenRouter" type="password" placeholder="OPENROUTER_API_KEY" autocomplete="off" />
+    <div class="modal-card modal-wide">
+      <h2>connect an AI</h2>
+      <p class="modal-lead">Pick at least one. Click the signup link, copy your key, paste it here. That’s it.</p>
+
+      <div class="key-slot" data-slot="gemini">
+        <div class="key-slot-top">
+          <strong>Google Gemini</strong>
+          <span class="key-badge free">free tier</span>
+          <a class="key-link" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">get a free key →</a>
+        </div>
+        <p class="key-hint">An API key lets you chat with Gemini through tokenish. This is our recommended free start.</p>
+        <input id="keyGemini" type="password" placeholder="paste gemini key here" autocomplete="off" />
+      </div>
+
+      <div class="key-slot" data-slot="openrouter">
+        <div class="key-slot-top">
+          <strong>OpenRouter (open models)</strong>
+          <span class="key-badge free">free models</span>
+          <a class="key-link" href="https://openrouter.ai/keys" target="_blank" rel="noopener">get a key →</a>
+        </div>
+        <p class="key-hint">An API key lets tokenish try many free open models if Gemini is busy.</p>
+        <input id="keyOpenRouter" type="password" placeholder="paste openrouter key here" autocomplete="off" />
+      </div>
+
+      <div class="key-slot" data-slot="openai">
+        <div class="key-slot-top">
+          <strong>ChatGPT (OpenAI)</strong>
+          <span class="key-badge paid">needs paid plan</span>
+          <a class="key-link" href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">get a key →</a>
+        </div>
+        <p class="key-hint">ChatGPT API access usually needs a paid OpenAI account/subscription.</p>
+        <input id="keyOpenAI" type="password" placeholder="paste chatgpt/openai key here" autocomplete="off" />
+      </div>
+
+      <div class="key-slot" data-slot="anthropic">
+        <div class="key-slot-top">
+          <strong>Claude (Anthropic)</strong>
+          <span class="key-badge paid">needs paid plan</span>
+          <a class="key-link" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">get a key →</a>
+        </div>
+        <p class="key-hint">Claude API access usually needs a paid Anthropic account/subscription.</p>
+        <input id="keyAnthropic" type="password" placeholder="paste claude key here" autocomplete="off" />
+      </div>
+
+      <div class="key-slot" data-slot="perplexity">
+        <div class="key-slot-top">
+          <strong>Perplexity</strong>
+          <a class="key-link" href="https://www.perplexity.ai/settings/api" target="_blank" rel="noopener">get a key →</a>
+        </div>
+        <p class="key-hint">An API key lets you chat with Perplexity through tokenish.</p>
+        <input id="keyPerplexity" type="password" placeholder="paste perplexity key here" autocomplete="off" />
+      </div>
+
+      <div class="key-slot" data-slot="groq">
+        <div class="key-slot-top">
+          <strong>Groq (fast 70b / 8b)</strong>
+          <a class="key-link" href="https://console.groq.com/keys" target="_blank" rel="noopener">get a key →</a>
+        </div>
+        <p class="key-hint">An API key unlocks Groq’s fast Llama models. We try the larger 70b first, then the quicker 8b.</p>
+        <input id="keyGroq" type="password" placeholder="paste groq key here" autocomplete="off" />
+      </div>
+
+      <div class="key-slot" data-slot="copilot">
+        <div class="key-slot-top">
+          <strong>Microsoft Copilot</strong>
+          <span class="key-badge soon">coming soon</span>
+          <a class="key-link" href="https://copilot.microsoft.com/" target="_blank" rel="noopener">learn more →</a>
+        </div>
+        <p class="key-hint">Copilot chat linking is not ready in tokenish yet. Soft reserved for a later update.</p>
+        <input id="keyCopilot" type="password" placeholder="not wired yet — leave blank" autocomplete="off" disabled />
+      </div>
+
+      <div id="customKeySlots"></div>
+      <button class="btn" id="addCustomKey" type="button">+ add another AI key</button>
+
+      <div class="stack-box">
+        <label for="fallbackPref">If several AIs are connected, try them in this order</label>
+        <p class="key-hint">Paid ones you added go first. Free stack prefers Gemini, then OpenRouter, then Groq, then Perplexity.</p>
+        <input id="fallbackPref" type="text" value="anthropic,openai,gemini,openrouter,groq,perplexity" />
+      </div>
+
       <div id="keyModalMsg" class="error" hidden></div>
+      <label class="dont-show">
+        <input type="checkbox" id="dontShowWizard" />
+        don’t show this again (you can reopen from “manage connections…”)
+      </label>
       <div class="modal-actions">
-        <button class="btn" id="keySkip" type="button">skip for now</button>
+        <button class="btn" id="keySkip" type="button">not now</button>
         <button class="btn primary" id="keySave" type="button">save & continue</button>
       </div>
     </div>
   </div>
-  <script src="/ui/app.js?v=0.2.10-attach-thumbs"></script>
+  <script src="/ui/app.js?v=0.3.0"></script>
 </body>
 </html>

@@ -47,6 +47,34 @@ def save_keys(keys: dict[str, str]) -> Path:
     return path
 
 
+def load_prefs() -> dict:
+    path = config_path()
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return dict(data.get("prefs") or {})
+
+
+def save_prefs(prefs: dict) -> Path:
+    home = tokenish_home()
+    home.mkdir(parents=True, exist_ok=True)
+    path = config_path()
+    existing: dict = {}
+    if path.exists():
+        try:
+            existing = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            existing = {}
+    merged = dict(existing.get("prefs") or {})
+    merged.update({k: v for k, v in prefs.items() if v is not None})
+    existing["prefs"] = merged
+    path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+    return path
+
+
 def apply_saved_keys_to_environ(*, overwrite: bool = True) -> dict[str, str]:
     """Load ~/.tokenish keys into os.environ so live requests see them."""
     loaded = load_keys()

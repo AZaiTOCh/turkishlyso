@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tokenish"
-version = "0.2.0"
+version = "0.3.0"
 description = "Local token optimizer daemon — Ollama-simple install"
 requires-python = ">=3.10"
 license = { text = "MIT" }
