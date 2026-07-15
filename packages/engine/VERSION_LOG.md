@@ -6,6 +6,36 @@ Factual release ledger. Updated when a version is committed.
 
 ---
 
+## v0.4.1 — Grett router + provider health UX
+
+- **DoP:** Jul 14–15, 2026 · overnight through ~10:05 AM EST
+- Package version **0.4.1**.
+
+### Agents / agentics
+| Agent | Role / skills (this release) |
+|---|---|
+| **Grett** | Splash + API onboarding host; **protoprompter / qualifier / router** — matches what you want to a **curated** capability map, then only among **linked** APIs. Not a live “best LLM” scraper. Sidebar ask + recommend path shipped; **chatbox follow-ups parked** (see reminder below). |
+| **Argus** | Provider health; soft grey-out reasons (quota / missing key / no credits); Gemini quota stays marked until recoverable. |
+| **Agatha** | Archive to `~/.tokenish/output/runs/*.md` + lifetime scoreboard JSON (SQLite write off for new path). |
+| **Rainman** | Equal attributed shares of measured run savings among fired cylinders. |
+| **NeoBorg** | Display rename + Live World Counter (as in v0.4). |
+
+### Product
+- Brand wordmark polish; history **dropdown** so chat list cannot cover Grett.
+- Connection / current-model soft grey + blurbs; Gemini lock to `gemini-3.5-flash` with Search-aware parity path.
+- Passthrough parity for bare chat; explicit provider lock (no silent Gemma swap).
+
+### Future reminder — Grett chatbox (parked)
+| Phase | Scope | Effort |
+|---|---|---|
+| **Light** | Short follow-ups (“are you sure?”, “what about ChatGPT?”) + last-pick memory + Enter-to-send | ~0.5–1 day |
+| **Medium** | Multi-turn Grett sidebar chat (LLM for talk; rules still route models) | ~2–4 days |
+| **Heavy** | Full agent: multi-LLM bake-offs, tools, long memory | 1–2+ weeks |
+
+Light agreed as next chat layer when cylinder finetuning cools down — **not started in v0.4.1**.
+
+---
+
 ## Neologisms register
 
 Add every new tokenish coinage here when it is incepted. Keep definitions plain. Update **Active (v0.3 default)** when defaults change.
@@ -33,6 +63,7 @@ Add every new tokenish coinage here when it is incepted. Keep definitions plain.
 | **Agatha** | Files Rainman’s briefs in a local SQLite archive (`~/.tokenish/agatha.db`) | v0.3 | v0.3 |
 | **Mrs. Brown** | Matriarch hive agent — accepts only valid numeric TOKEX records, then hands off to NeoBorg | v0.3 | v0.3 |
 | **NeoBorg** | Benevolent hive agent — cross-vet + ledger + Live World Counter broadcast | v0.3 | v0.3 ledger; **v0.4** live counter / sync |
+| **Grett** | Onboarding + LLM **protoprompter / qualifier / router** via curated map + linked keys (not scrape-as-truth) | v0.4.1 | v0.4.1 splash/recommend; chatbox phases parked |
 
 ### Tokopt cylinders (current register)
 

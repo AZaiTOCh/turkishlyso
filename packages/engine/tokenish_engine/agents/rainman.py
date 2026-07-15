@@ -1,8 +1,9 @@
 """
 Rainman — tokopt cylinder interrogator.
 
-Factual only: counts stage participation from real pipeline stage tags and
-TOKEX numbers. Never invents savings, never calls an LLM, never assumes.
+Factual only: stage participation + TOKEX totals from the pipeline.
+Per-cylinder token figures are *equal attributed share* of the measured run
+savings among cylinders that fired — not independent causal probes.
 """
 
 from __future__ import annotations
@@ -26,6 +27,8 @@ _CYLINDER_RULES: list[tuple[str, tuple[str, ...]]] = [
     ("passthrough", ("passthrough_short",)),
 ]
 
+CYLINDER_NAMES: tuple[str, ...] = tuple(name for name, _ in _CYLINDER_RULES)
+
 
 def _stage_hit(stage: str, prefixes: tuple[str, ...]) -> bool:
     return any(stage == p or stage.startswith(p) for p in prefixes)
@@ -42,7 +45,9 @@ def interrogate_run(
     """
     Return a Rainman brief built only from measured inputs.
 
-    Every number is from TokexReport / stage tags. Missing data stays null — never guessed.
+    Every run total is from TokexReport / stage tags. Missing data stays null.
+    Per-cylinder saved_tokens = equal share of this run's saved_tokex across
+    fired cylinders (documented attribution — not a separate meter).
     """
     stage_list = [str(s) for s in (stages or [])]
     t = tokex or {}
@@ -53,27 +58,39 @@ def interrogate_run(
     if total > 0 and "saved_pct" not in t:
         pct = round((saved / total) * 100.0, 2)
 
-    cylinders: list[dict[str, Any]] = []
-    active = 0
+    fired_names: list[str] = []
+    preliminary: list[dict[str, Any]] = []
     for name, prefixes in _CYLINDER_RULES:
         hits = [s for s in stage_list if _stage_hit(s, prefixes)]
         fired = bool(hits)
         if fired:
-            active += 1
-        cylinders.append(
+            fired_names.append(name)
+        preliminary.append(
             {
                 "cylinder": name,
                 "fired": fired,
                 "stage_tags": hits,
-                # Participation = share of fired cylinders this run (not invent savings %).
-                "participation_of_fired": None,
+                "saved_tokens": 0,
+                "saved_pct_of_run": 0.0,
+                "participation_of_fired": 0.0,
+                "status": "active" if fired else "INACTIVE",
             }
         )
-    for row in cylinders:
-        if active and row["fired"]:
-            row["participation_of_fired"] = round(100.0 / active, 2)
-        else:
-            row["participation_of_fired"] = 0.0
+
+    active = len(fired_names)
+    if active and saved > 0:
+        base = saved // active
+        rem = saved - (base * active)
+        share_pct = round(100.0 / active, 2)
+        for row in preliminary:
+            if not row["fired"]:
+                continue
+            extra = 1 if rem > 0 else 0
+            if rem > 0:
+                rem -= 1
+            row["saved_tokens"] = base + extra
+            row["saved_pct_of_run"] = share_pct
+            row["participation_of_fired"] = share_pct
 
     its = its_meta or {}
     findings: list[str] = [
@@ -91,13 +108,10 @@ def interrogate_run(
         findings.append(f"its_dropped={its.get('dropped')}")
         findings.append(f"its_kept={its.get('kept')}")
 
-    # Explicit non-claims so the brief cannot be misread.
     caveats = [
-        "Rainman does not estimate per-cylinder token savings unless Agatha logs "
-        "before/after probes for that cylinder; this brief only reports which "
-        "cylinders fired and the single run TOKEX totals.",
-        "No LLM was used. No assumptions about provider billing beyond the "
-        "numbers supplied in tokex.",
+        "Per-cylinder saved_tokens are equal attributed shares of the measured "
+        "run savings among cylinders that fired — not independent before/after probes.",
+        "No LLM was used. Numbers come only from tokex + stage tags.",
     ]
 
     return {
@@ -112,12 +126,12 @@ def interrogate_run(
             "saved_pct": pct,
         },
         "stages": stage_list,
-        "cylinders": cylinders,
+        "cylinders": preliminary,
         "findings": findings,
         "caveats": caveats,
         "verdict": (
             f"run saved {saved} tokex ({pct}%) with {active} cylinder(s) firing; "
-            "per-cylinder savings pending Agatha probe history"
+            "inactive cylinders marked INACTIVE"
             if total
             else "no measurable tokex on this run"
         ),

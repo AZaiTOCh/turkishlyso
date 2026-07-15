@@ -72,7 +72,7 @@ def _recompute(data: dict[str, Any]) -> dict[str, Any]:
     pct = round((saved / total) * 100.0, 2) if total else 0.0
     return {
         "clock": "Live World Counter Clock",
-        "agent": "NeoBorg",
+        "agent": "Neoborg",
         "saved_tokex": saved,
         "total_tokex": total,
         "saved_pct": pct,

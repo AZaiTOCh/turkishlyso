@@ -211,14 +211,18 @@ def optimize(
 
     nodes = compress_instructions(prompt, follow_attachment=follow_mode)
 
-    if not raw_doc and not images and count_tokens(prompt) < 32:
-        envelope = prompt.strip()
-        stages.append("passthrough_short")
+    # Chat-only (no attachment): pass the user prompt verbatim so answers match
+    # the same model outside tokenish. Tokopt envelopes apply when docs/images exist.
+    if not raw_doc and not images:
+        envelope = (prompt or "").strip()
+        stages.append("passthrough_parity")
         tokex = compute_tokex(
             baseline_text=baseline_prompt(prompt, ""),
             optimized_text=envelope,
             stages=stages,
-            fact_notes=["short prompt — optimizer skipped (nothing to compress)"],
+            fact_notes=[
+                "chat-only parity path — optimizer skipped so provider sees the exact user text"
+            ],
         )
         return _agent_seal(
             envelope=envelope,

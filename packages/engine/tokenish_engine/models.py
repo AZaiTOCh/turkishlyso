@@ -66,3 +66,7 @@ class ProviderStatus(BaseModel):
     available: bool
     detail: str = ""
     models: list[str] = Field(default_factory=list)
+    # UI soft grey-out: ok | missing_key | quota | no_credits | error
+    reason: str = "ok"
+    hint: str = ""
+    usable: bool = True
