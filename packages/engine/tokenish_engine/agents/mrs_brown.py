@@ -2,7 +2,7 @@
 Mrs. Brown — matriarch hive agent.
 
 Receives validated local TOKEX / cylinder records (from Agatha),
-checks they are well-formed numbers only, then hands them to NeoBorg
+checks they are well-formed numbers only, then hands them to Neoborg
 for global cross-vetting and broadcast bookkeeping.
 
 No LLM. No invented totals.

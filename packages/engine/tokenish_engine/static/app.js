@@ -20,11 +20,56 @@ const DEFAULT_MODELS = [
   "openrouter/free",
 ];
 
+const MODELS_BY_PROVIDER = {
+  auto: ["gpt-4o", "claude-sonnet-4-20250514", "gemini-3.5-flash", "openrouter/free", "llama-3.3-70b-versatile", "llama-3.1-8b-instant", "grok-3", "sonar"],
+  gemini: ["gemini-3.5-flash"],
+  openrouter: ["openrouter/free"],
+  groq: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"],
+  grok: ["grok-3"],
+  anthropic: ["claude-sonnet-4-20250514"],
+  openai: ["gpt-4o"],
+  perplexity: ["sonar"],
+};
+
+const PROVIDER_BY_MODEL = {};
+for (const [p, models] of Object.entries(MODELS_BY_PROVIDER)) {
+  if (p === "auto") continue;
+  for (const m of models) PROVIDER_BY_MODEL[m] = p;
+}
+
+const PROVIDER_OPTION_LABELS = {
+  auto: "auto (recommended)",
+  gemini: "gemini",
+  openrouter: "openrouter",
+  grok: "grok",
+  groq: "groq",
+  anthropic: "claude",
+  openai: "chatgpt",
+  perplexity: "perplexity",
+};
+
+/** @type {Record<string, { usable: boolean, reason: string, hint: string, detail: string }>} */
+let providerHealth = {};
+
+const AUTH_KEY = "tokenish.auth.v1";
+const GRETT_INTRO_KEY = "tokenish.grett.intro.v1";
+const GRETT_SEEN_KEY = "tokenish.grett.seen.v1";
+const GRETT_PICK_KEY = "tokenish.grett.pick.v1";
+
 let files = [];
 let threads = [];
 let activeId = null;
 /** Lifetime totals across ALL chats — never reset on new chat. */
 let lifetime = emptyTokex();
+let linkedKeysStatus = {
+  gemini: false,
+  openrouter: false,
+  openai: false,
+  anthropic: false,
+  perplexity: false,
+  groq: false,
+  grok: false,
+};
 
 function uid() {
   return `t_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -414,7 +459,7 @@ function accumulateTokex(thread, report) {
   lifetime.saved += saved;
   lifetime.last = send;
   lifetime.sends.push(send);
-  // NeoBorg / Live World Counter Clock refreshes after each measured send.
+  // Neoborg / Live World Counter Clock refreshes after each measured send.
   refreshTokexClock();
 }
 
@@ -725,6 +770,15 @@ function closeAllThreadMenus() {
   document.querySelectorAll(".thread-menu.open").forEach((el) => el.classList.remove("open"));
 }
 
+function setHistoryOpen(open) {
+  const list = threadListEl;
+  const btn = document.getElementById("historyToggle");
+  if (!list || !btn) return;
+  list.classList.toggle("open", open);
+  list.hidden = !open;
+  btn.setAttribute("aria-expanded", open ? "true" : "false");
+}
+
 function renderThreadList() {
   closeAllThreadMenus();
   const sorted = [...threads].sort((a, b) => b.updatedAt - a.updatedAt);
@@ -817,22 +871,128 @@ function apiHistory(thread) {
     .map((m) => ({ role: m.role, content: m.content }));
 }
 
+function healthForProvider(name) {
+  if (!name || name === "auto") return { usable: true, reason: "ok", hint: "", detail: "" };
+  return providerHealth[name] || { usable: true, reason: "ok", hint: "", detail: "" };
+}
+
+function healthForModel(model) {
+  const p = PROVIDER_BY_MODEL[model];
+  return healthForProvider(p);
+}
+
+function reasonSuffix(reason) {
+  if (reason === "quota") return " · check back soon";
+  if (reason === "missing_key") return " · link a key";
+  if (reason === "no_credits") return " · add credits";
+  if (reason === "error") return " · check back soon";
+  return "";
+}
+
+function setSlotStatus(el, hint, reason) {
+  if (!el) return;
+  if (!hint) {
+    el.hidden = true;
+    el.textContent = "";
+    el.classList.remove("warn");
+    return;
+  }
+  el.hidden = false;
+  el.textContent = hint;
+  el.classList.toggle("warn", reason !== "ok" && reason !== "missing_key");
+}
+
+function paintProviderOptions() {
+  if (!providerSelect) return;
+  const current = providerSelect.value;
+  for (const opt of providerSelect.options) {
+    const key = opt.value;
+    const base = PROVIDER_OPTION_LABELS[key] || key;
+    if (key === "auto") {
+      opt.textContent = base;
+      opt.classList.remove("degraded");
+      continue;
+    }
+    const h = healthForProvider(key);
+    opt.textContent = base + reasonSuffix(h.reason);
+    opt.classList.toggle("degraded", h.reason !== "ok");
+  }
+  if ([...providerSelect.options].some((o) => o.value === current)) {
+    providerSelect.value = current;
+  }
+}
+
+function applyAvailabilityUI() {
+  paintProviderOptions();
+  const conn = providerSelect?.value || "auto";
+  const model = modelSelect?.value || "";
+  const connHealth = healthForProvider(conn);
+  const modelOwner = conn === "auto" ? (PROVIDER_BY_MODEL[model] || "") : conn;
+  const modelHealth = healthForProvider(modelOwner);
+
+  providerSelect?.classList.toggle("degraded", conn !== "auto" && connHealth.reason !== "ok");
+  modelSelect?.classList.toggle("degraded", modelHealth.reason !== "ok");
+
+  if (conn !== "auto") {
+    setSlotStatus(
+      document.getElementById("connectionStatus"),
+      connHealth.reason !== "ok" ? (connHealth.hint || "check back soon") : "",
+      connHealth.reason
+    );
+    setSlotStatus(document.getElementById("modelStatus"), "", "ok");
+  } else {
+    setSlotStatus(document.getElementById("connectionStatus"), "", "ok");
+    setSlotStatus(
+      document.getElementById("modelStatus"),
+      modelHealth.reason !== "ok" ? (modelHealth.hint || "check back soon") : "",
+      modelHealth.reason
+    );
+  }
+  updateSlotDots();
+}
+
 function fillModels(models, preferred) {
+  const provider = providerSelect?.value || "auto";
+  const fromProvider = MODELS_BY_PROVIDER[provider] || DEFAULT_MODELS;
   const current = modelSelect.value;
   const filtered = (models || []).filter(
     (m) => m === "gemini-3.5-flash" || m.startsWith("openrouter") || !String(m).startsWith("gemini")
   );
-  const uniq = [...new Set([...(filtered || []), ...DEFAULT_MODELS].filter(Boolean))];
-  modelSelect.innerHTML = uniq.map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join("");
-  let pick = preferred || current || "gemini-3.5-flash";
-  if (String(pick).startsWith("gemini") && pick !== "gemini-3.5-flash") {
-    pick = "gemini-3.5-flash";
+  const pool = provider === "auto"
+    ? [...fromProvider, ...(filtered || [])]
+    : fromProvider;
+  const uniq = [...new Set(pool.filter(Boolean))];
+  modelSelect.innerHTML = uniq.map((m) => {
+    const owner = provider === "auto" ? (PROVIDER_BY_MODEL[m] || "") : provider;
+    const h = healthForProvider(owner);
+    const label = escapeHtml(m) + escapeHtml(reasonSuffix(h.reason));
+    const deg = h.reason !== "ok" ? " degraded" : "";
+    return `<option class="${deg.trim()}" value="${escapeHtml(m)}">${label}</option>`;
+  }).join("");
+  let pick = preferred || current || uniq[0] || "gemini-3.5-flash";
+  if (provider === "gemini" || (String(pick).startsWith("gemini") && pick !== "gemini-3.5-flash")) {
+    if (provider === "gemini") pick = "gemini-3.5-flash";
+    else if (String(pick).startsWith("gemini") && pick !== "gemini-3.5-flash") pick = "gemini-3.5-flash";
   }
   if ([...modelSelect.options].some((o) => o.value === pick)) {
     modelSelect.value = pick;
   } else if (modelSelect.options.length) {
     modelSelect.selectedIndex = 0;
   }
+  applyAvailabilityUI();
+}
+
+function updateSlotDots() {
+  const connDot = document.getElementById("connectionDot");
+  const modelDot = document.getElementById("modelDot");
+  const hasAny = Object.values(linkedKeysStatus).some(Boolean);
+  const connectionOn = hasAny && !!providerSelect?.value;
+  const modelOn = connectionOn && !!modelSelect?.value;
+  const conn = providerSelect?.value || "auto";
+  const connOk = conn === "auto" || healthForProvider(conn).usable;
+  const modelOk = healthForModel(modelSelect?.value).usable || (conn !== "auto" && connOk);
+  connDot?.classList.toggle("active", connectionOn && connOk);
+  modelDot?.classList.toggle("active", modelOn && (conn === "auto" ? modelOk : connOk));
 }
 
 async function saveKeys(payload) {
@@ -846,30 +1006,59 @@ async function saveKeys(payload) {
   return data;
 }
 
-async function loadProviders() {
+async function loadProviders(force = false) {
   try {
-    const res = await fetch("/providers", { cache: "no-store" });
+    const res = await fetch(force ? "/providers?force=1" : "/providers", { cache: "no-store" });
     const data = await res.json();
     providersEl.innerHTML = "";
     const modelSet = [];
+    const nextHealth = {};
     for (const p of data.providers || []) {
-      // show all providers Argus returns
+      let reason = p.reason || "";
+      let hint = p.hint || "";
+      const detailL = String(p.detail || "").toLowerCase();
+      if (!reason) {
+        if (p.usable === false || p.available === false) {
+          if (/quota|429|rate/.test(detailL)) reason = "quota";
+          else if (/credit|license/.test(detailL)) reason = "no_credits";
+          else if (/no key|missing/.test(detailL)) reason = "missing_key";
+          else reason = "error";
+        } else if (/quota|429|out of calls/.test(detailL)) {
+          reason = "quota";
+        } else {
+          reason = "ok";
+        }
+      }
+      if (!hint) {
+        if (reason === "quota") hint = "out of calls — check back soon";
+        else if (reason === "missing_key") hint = "link a key in manage connections";
+        else if (reason === "no_credits") hint = "add credits on the provider site";
+        else if (reason === "error") hint = "check back soon";
+      }
+      nextHealth[p.name] = {
+        usable: reason === "ok",
+        reason,
+        hint,
+        detail: p.detail || "",
+      };
       const row = document.createElement("div");
-      row.className = "provider";
-      const linkedNote = p.available ? " · linked" : "";
-      row.innerHTML = `<span><span class="dot ${p.available ? "ok" : "bad"}"></span>${p.name}${linkedNote}</span><span style="color:var(--muted);font-size:0.75rem">${escapeHtml(p.detail || "")}</span>`;
+      row.className = "provider" + (reason === "ok" ? "" : " degraded");
+      const hasKey = reason !== "missing_key";
+      const linkedNote = hasKey ? " · linked" : "";
+      const right = escapeHtml(hint || p.detail || "");
+      row.innerHTML = `<span><span class="dot ${reason === "ok" ? "ok" : "bad"}"></span>${p.name}${linkedNote}</span><span style="color:var(--muted);font-size:0.75rem">${right}</span>`;
       providersEl.appendChild(row);
       (p.models || []).forEach((m) => modelSet.push(m));
     }
+    providerHealth = nextHealth;
     // Secondary sync: Argus inventory keeps popup greying current even if keys endpoint lagged.
     if (data.linked_keys?.has) {
       fillKeyWizard({ has: data.linked_keys.has, prefs: {} });
     }
     const pref = data.preferred;
     fillModels(modelSet, pref?.model);
-    if (pref?.provider && [...providerSelect.options].some((o) => o.value === pref.provider)) {
-      providerSelect.value = "auto";
-    }
+    // Do NOT force connection back to auto — that silently ignored the user's pick.
+    applyAvailabilityUI();
   } catch {
     showError("engine offline — restart tokenish");
     fillModels(DEFAULT_MODELS);
@@ -939,6 +1128,14 @@ async function send() {
           renderTokexPanel(thread);
           saveStore();
           if (evt.attachment_warning) showError(evt.attachment_warning);
+          if (evt.provider || evt.model) {
+            const who = `${evt.provider || "?"} / ${evt.model || "?"}`;
+            showError(`answering with ${who}`);
+          }
+        } else if (evt.type === "routing") {
+          const who = `${evt.provider || "?"} / ${evt.model || "?"}`;
+          const why = evt.fallback_reason ? ` — ${evt.fallback_reason}` : "";
+          showError(`switched to ${who}${why}`);
         } else if (evt.type === "delta") {
           if (!bubble) {
             loader.remove();
@@ -968,6 +1165,7 @@ async function send() {
     bubble.querySelector(".body").innerHTML = formatReply(errText);
     thread.messages.push({ role: "assistant", content: errText });
     saveStore();
+    loadProviders(true).catch(() => {});
   }
 }
 
@@ -979,6 +1177,10 @@ fileInput.onchange = async () => {
 };
 document.getElementById("sendBtn").onclick = () => send();
 document.getElementById("newChat").onclick = () => createChat();
+document.getElementById("historyToggle")?.addEventListener("click", () => {
+  const open = document.getElementById("historyToggle")?.getAttribute("aria-expanded") !== "true";
+  setHistoryOpen(open);
+});
 document.querySelectorAll(".tokex-details-btn").forEach((btn) => {
   btn.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -1003,16 +1205,6 @@ promptEl.addEventListener("keydown", (e) => {
   }
 });
 
-let linkedKeysStatus = {
-  gemini: false,
-  openrouter: false,
-  openai: false,
-  anthropic: false,
-  perplexity: false,
-  groq: false,
-  grok: false,
-};
-
 async function refreshLinkedApiSlots() {
   /** Always re-read which APIs are already linked (launch / reopen / post-save). */
   try {
@@ -1025,12 +1217,283 @@ async function refreshLinkedApiSlots() {
   }
 }
 
-async function maybeShowKeyWizard() {
+async function maybeShowKeyWizard(force = false) {
   const modal = document.getElementById("keyModal");
   if (!modal) return;
   const data = await refreshLinkedApiSlots();
-  if (data?.prefs?.hide_key_wizard) return;
+  if (!force && data?.prefs?.hide_key_wizard) return;
   modal.hidden = false;
+}
+
+function loadAuth() {
+  try {
+    return JSON.parse(localStorage.getItem(AUTH_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function saveAuth(user) {
+  localStorage.setItem(AUTH_KEY, JSON.stringify(user));
+}
+
+function showModal(id, on) {
+  const el = document.getElementById(id);
+  if (el) el.hidden = !on;
+}
+
+async function startLaunchFlow() {
+  // Strict order: Grett intro → sign-in → API explainer → key list.
+  if (!sessionStorage.getItem(GRETT_INTRO_KEY)) {
+    showModal("grettModal", true);
+    return;
+  }
+  if (!loadAuth()) {
+    showModal("authModal", true);
+    return;
+  }
+  if (!sessionStorage.getItem(GRETT_SEEN_KEY)) {
+    showModal("grettApiModal", true);
+    return;
+  }
+  await maybeShowKeyWizard();
+}
+
+document.getElementById("grettStart")?.addEventListener("click", () => {
+  sessionStorage.setItem(GRETT_INTRO_KEY, "1");
+  // Always require sign-in + Grett API explainer before keys — never skip.
+  sessionStorage.removeItem(GRETT_SEEN_KEY);
+  showModal("grettModal", false);
+  showModal("authModal", true);
+});
+
+document.getElementById("grettSkipIntro")?.addEventListener("click", () => {
+  sessionStorage.setItem(GRETT_INTRO_KEY, "1");
+  showModal("grettModal", false);
+  showModal("authModal", true);
+});
+
+function finishAuth(user) {
+  saveAuth(user);
+  showModal("authModal", false);
+  // Same Grett window: Welcome back + API waiter explainer, then NEXT.
+  showModal("grettApiModal", true);
+}
+
+document.getElementById("authSkip")?.addEventListener("click", () => {
+  sessionStorage.setItem(GRETT_INTRO_KEY, "1");
+  showModal("authModal", false);
+  showModal("grettApiModal", true);
+});
+
+document.getElementById("authContinue")?.addEventListener("click", () => {
+  const email = document.getElementById("authEmail")?.value.trim() || "";
+  const password = document.getElementById("authPassword")?.value || "";
+  const msg = document.getElementById("authModalMsg");
+  if (!email || !email.includes("@") || password.length < 4) {
+    if (msg) {
+      msg.hidden = false;
+      msg.textContent = "use a real email and a password (4+ characters).";
+    }
+    return;
+  }
+  if (msg) msg.hidden = true;
+  finishAuth({ email, provider: "email", at: Date.now() });
+});
+
+document.getElementById("authGoogle")?.addEventListener("click", () => {
+  // Local demo session until real OAuth client IDs are configured.
+  finishAuth({ email: "google-user@local", provider: "google-local", at: Date.now() });
+});
+document.getElementById("authFacebook")?.addEventListener("click", () => {
+  finishAuth({ email: "facebook-user@local", provider: "facebook-local", at: Date.now() });
+});
+
+document.getElementById("grettNextKeys")?.addEventListener("click", async () => {
+  sessionStorage.setItem(GRETT_SEEN_KEY, "1");
+  showModal("grettApiModal", false);
+  // ONLY after NEXT does the API key list open.
+  await maybeShowKeyWizard(true);
+});
+
+document.getElementById("grettSkipApi")?.addEventListener("click", () => {
+  sessionStorage.setItem(GRETT_SEEN_KEY, "1");
+  showModal("grettApiModal", false);
+  showGrettNeedModal();
+});
+
+function loadGrettPick() {
+  try {
+    return JSON.parse(localStorage.getItem(GRETT_PICK_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function saveGrettPick(pick) {
+  localStorage.setItem(GRETT_PICK_KEY, JSON.stringify(pick));
+  renderGrettSlotStatus(pick);
+}
+
+function renderGrettSlotStatus(pick) {
+  const el = document.getElementById("grettSlotStatus");
+  if (!el) return;
+  if (!pick?.note) {
+    el.textContent = "tell Grett what you want to do";
+    return;
+  }
+  el.textContent = pick.note;
+}
+
+function grettRecommendLocal(need) {
+  const text = String(need || "").toLowerCase();
+  const map = [
+    { provider: "openai", model: "gpt-4o", keys: ["logo", "brand", "design", "creative", "image gen", "illustrat", "artwork", "company logo", "code", "plan", "brainstorm", "json"], blurb: "ChatGPT gpt-4o — strong for creative briefs and design work" },
+    { provider: "anthropic", model: "claude-sonnet-4-20250514", keys: ["summar", "legal", "contract", "assess", "rewrite", "edit", "essay", "careful"], blurb: "Claude Sonnet — strong at careful writing and rewrites" },
+    { provider: "gemini", model: "gemini-3.5-flash", keys: ["document", "pdf", "explain", "search", "general", "photo"], blurb: "gemini-3.5-flash — fast everyday helper with live-web access" },
+    { provider: "perplexity", model: "sonar", keys: ["news", "current", "today", "market", "research"], blurb: "Perplexity sonar — strong at fresh web-backed answers" },
+    { provider: "groq", model: "llama-3.3-70b-versatile", keys: ["fast", "quick", "speed"], blurb: "Groq llama-3.3-70b — very fast answers when speed matters" },
+    { provider: "openrouter", model: "openrouter/free", keys: ["free", "try", "budget"], blurb: "OpenRouter free models — when you just want to try" },
+    { provider: "grok", model: "grok-3", keys: ["twitter", "humor", "opinion"], blurb: "grok-3 — more conversational takes" },
+  ];
+  const scored = map
+    .map((row) => ({
+      ...row,
+      score: row.keys.reduce((n, k) => n + (text.includes(k) ? 1 : 0), 0),
+      isLinked: !!linkedKeysStatus[row.provider],
+    }))
+    .sort((a, b) => b.score - a.score);
+  const ideal = scored[0];
+  const linkedPool = scored.filter((r) => r.isLinked);
+  let best = linkedPool[0] || scored.find((r) => r.provider === "gemini") || ideal;
+  let note;
+  if (ideal && ideal.provider !== best.provider && ideal.score > 0) {
+    note = `Ok — ${ideal.provider} fits that need best. It’s not linked here, so we lined up ${best.provider} (${best.blurb}).`;
+  } else {
+    note = `Ok — ${best.provider} is lined up for you (${best.blurb}).`;
+  }
+  return {
+    agent: "Grett",
+    note,
+    selected: {
+      provider: best.provider,
+      model: best.model,
+      blurb: best.blurb,
+      linked: !!linkedKeysStatus[best.provider],
+    },
+  };
+}
+
+function applyGrettSelection(data) {
+  saveGrettPick(data);
+  const sel = data?.selected || {};
+  if (sel.provider && [...(providerSelect?.options || [])].some((o) => o.value === sel.provider)) {
+    providerSelect.value = sel.provider;
+    fillModels(MODELS_BY_PROVIDER[sel.provider] || DEFAULT_MODELS, sel.model);
+  }
+  updateSlotDots();
+}
+
+async function resolveGrettNeed(need) {
+  let data = null;
+  try {
+    const res = await fetch("/grett/recommend", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ need }),
+    });
+    const raw = await res.text();
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      data = null;
+    }
+    if (!res.ok || !data?.note) data = grettRecommendLocal(need);
+  } catch {
+    data = grettRecommendLocal(need);
+  }
+  applyGrettSelection(data);
+  return data;
+}
+
+function showGrettNeedModal() {
+  const input = document.getElementById("grettNeedInput");
+  const msg = document.getElementById("grettNeedMsg");
+  if (input) input.value = "";
+  if (msg) msg.hidden = true;
+  showModal("grettNeedModal", true);
+}
+
+async function askGrett() {
+  const need = document.getElementById("grettAsk")?.value.trim() || "";
+  const status = document.getElementById("grettSlotStatus");
+  if (!need) {
+    if (status) status.textContent = "just tell Grett what you want — no fancy prompt needed.";
+    return;
+  }
+  if (status) status.textContent = "Grett is lining up a fit…";
+  const data = await resolveGrettNeed(need);
+  if (status) status.textContent = data?.note || "lined up.";
+}
+
+document.getElementById("grettAskBtn")?.addEventListener("click", askGrett);
+
+document.getElementById("grettNeedGo")?.addEventListener("click", async () => {
+  const need = document.getElementById("grettNeedInput")?.value.trim() || "";
+  const msg = document.getElementById("grettNeedMsg");
+  if (!need) {
+    if (msg) {
+      msg.hidden = false;
+      msg.className = "error";
+      msg.textContent = "tell Grett what you want to look up or do.";
+    }
+    return;
+  }
+  if (msg) {
+    msg.hidden = false;
+    msg.className = "modal-lead";
+    msg.textContent = "lining up the best linked AI…";
+  }
+  await refreshLinkedApiSlots();
+  const data = await resolveGrettNeed(need);
+  showModal("grettNeedModal", false);
+  const th = activeThread();
+  if (th && data?.note) {
+    addBubble("assistant", data.note);
+    th.messages.push({ role: "assistant", content: data.note });
+    saveStore();
+  }
+  const slotAsk = document.getElementById("grettAsk");
+  if (slotAsk) slotAsk.value = need;
+});
+
+document.getElementById("grettNeedSkip")?.addEventListener("click", () => {
+  showModal("grettNeedModal", false);
+});
+
+function fitTextToWidth(el, targetPx) {
+  if (!el || !(targetPx > 0)) return;
+  el.style.letterSpacing = "0px";
+  el.style.transform = "";
+  el.style.width = "max-content";
+  const natural = el.getBoundingClientRect().width;
+  const text = (el.textContent || "").replace(/\s+/g, " ").trim();
+  const gaps = Math.max(text.length - 1, 1);
+  const delta = targetPx - natural;
+  if (Math.abs(delta) < 0.5) return;
+  if (delta > 0) {
+    el.style.letterSpacing = `${delta / gaps}px`;
+  } else {
+    el.style.transformOrigin = "left center";
+    el.style.transform = `scaleX(${targetPx / natural})`;
+  }
+}
+
+function fitBrandLines() {
+  const row = document.querySelector(".brand-title-row");
+  const rule = document.querySelector(".brand-rule");
+  if (!row || !rule) return;
+  rule.style.width = `${row.getBoundingClientRect().width}px`;
 }
 
 function applyLinkedStatus(hasMap) {
@@ -1095,44 +1558,32 @@ function fillKeyWizard(data) {
         badge.hidden = !present;
         badge.textContent = "already linked";
       }
+      const link = wrap.querySelector(".key-link");
+      if (link) {
+        link.classList.toggle("needs-key", !present);
+      }
     }
-  }
-  const sideGemini = document.getElementById("sideKeyGemini");
-  const sideOr = document.getElementById("sideKeyOpenRouter");
-  if (sideGemini) {
-    sideGemini.placeholder = linkedKeysStatus.gemini
-      ? "already linked — paste to replace"
-      : "paste gemini key";
-  }
-  if (sideOr) {
-    sideOr.placeholder = linkedKeysStatus.openrouter
-      ? "already linked — paste to replace"
-      : "paste openrouter key";
   }
   if (data.prefs?.fallback_preference) {
     const pref = document.getElementById("fallbackPref");
     if (pref) pref.value = data.prefs.fallback_preference;
   }
+  updateSlotDots();
 }
 
 async function handleKeySave(fromModal) {
   const msg = document.getElementById("keyModalMsg");
-  const payload = fromModal
-    ? {
-        GEMINI_API_KEY: document.getElementById("keyGemini")?.value.trim() || "",
-        OPENROUTER_API_KEY: document.getElementById("keyOpenRouter")?.value.trim() || "",
-        OPENAI_API_KEY: document.getElementById("keyOpenAI")?.value.trim() || "",
-        ANTHROPIC_API_KEY: document.getElementById("keyAnthropic")?.value.trim() || "",
-        PERPLEXITY_API_KEY: document.getElementById("keyPerplexity")?.value.trim() || "",
-        GROQ_API_KEY: document.getElementById("keyGroq")?.value.trim() || "",
-        XAI_API_KEY: document.getElementById("keyGrok")?.value.trim() || "",
-        fallback_preference: document.getElementById("fallbackPref")?.value.trim() || "",
-        hide_key_wizard: !!document.getElementById("dontShowWizard")?.checked,
-      }
-    : {
-        GEMINI_API_KEY: document.getElementById("sideKeyGemini")?.value.trim() || "",
-        OPENROUTER_API_KEY: document.getElementById("sideKeyOpenRouter")?.value.trim() || "",
-      };
+  const payload = {
+    GEMINI_API_KEY: document.getElementById("keyGemini")?.value.trim() || "",
+    OPENROUTER_API_KEY: document.getElementById("keyOpenRouter")?.value.trim() || "",
+    OPENAI_API_KEY: document.getElementById("keyOpenAI")?.value.trim() || "",
+    ANTHROPIC_API_KEY: document.getElementById("keyAnthropic")?.value.trim() || "",
+    PERPLEXITY_API_KEY: document.getElementById("keyPerplexity")?.value.trim() || "",
+    GROQ_API_KEY: document.getElementById("keyGroq")?.value.trim() || "",
+    XAI_API_KEY: document.getElementById("keyGrok")?.value.trim() || "",
+    fallback_preference: document.getElementById("fallbackPref")?.value.trim() || "",
+    hide_key_wizard: !!document.getElementById("dontShowWizard")?.checked,
+  };
 
   const newKeys = Object.entries(payload).filter(
     ([k, v]) => k.endsWith("_KEY") && !!String(v || "").trim(),
@@ -1141,16 +1592,12 @@ async function handleKeySave(fromModal) {
   const hasExisting = Object.values(linkedKeysStatus).some(Boolean);
 
   // Gemini / OpenRouter are never required. Any new key OR any already-linked provider is enough.
-  if (fromModal && !hasNew && !hasExisting) {
+  if (!hasNew && !hasExisting) {
     if (msg) {
       msg.hidden = false;
       msg.textContent = "paste at least one AI key (any provider). Gemini and OpenRouter are optional.";
     }
     showError("paste at least one AI key (any provider)");
-    return;
-  }
-  if (!fromModal && !hasNew && !hasExisting) {
-    showError("paste at least one key");
     return;
   }
 
@@ -1171,6 +1618,8 @@ async function handleKeySave(fromModal) {
       saveStore();
     }
     await loadProviders();
+    updateSlotDots();
+    if (fromModal) showGrettNeedModal();
   } catch (e) {
     showError(e.message || String(e));
     if (msg) { msg.hidden = false; msg.textContent = e.message || String(e); }
@@ -1179,13 +1628,20 @@ async function handleKeySave(fromModal) {
 
 document.getElementById("keySkip")?.addEventListener("click", () => {
   document.getElementById("keyModal").hidden = true;
+  showGrettNeedModal();
 });
 document.getElementById("keySave")?.addEventListener("click", () => handleKeySave(true));
-document.getElementById("sideKeySave")?.addEventListener("click", () => handleKeySave(false));
 document.getElementById("openKeyWizard")?.addEventListener("click", async () => {
   const modal = document.getElementById("keyModal");
   await refreshLinkedApiSlots();
   if (modal) modal.hidden = false;
+});
+providerSelect?.addEventListener("change", () => {
+  fillModels(MODELS_BY_PROVIDER[providerSelect.value] || DEFAULT_MODELS);
+  applyAvailabilityUI();
+});
+modelSelect?.addEventListener("change", () => {
+  applyAvailabilityUI();
 });
 document.getElementById("openHiveConnect")?.addEventListener("click", (e) => {
   e.stopPropagation();
@@ -1270,13 +1726,19 @@ document.addEventListener("click", () => {
   renderThreadList();
   selectThread(activeId);
   fillModels(DEFAULT_MODELS);
-  // Launch order: inventory first (greying), then Argus provider roster (re-syncs linked).
-  refreshLinkedApiSlots().then(() => loadProviders());
-  maybeShowKeyWizard();
+  // Launch: inventory → Argus → Grett/auth → API keys (not the old key wizard first).
+  refreshLinkedApiSlots().then(() => loadProviders()).then(() => updateSlotDots());
+  startLaunchFlow();
+  renderGrettSlotStatus(loadGrettPick());
   tickLiveWorldClock();
   setInterval(tickLiveWorldClock, 1000);
   refreshTokexClock();
   setInterval(refreshTokexClock, 15000);
   maybeShowHiveConnect(false);
   retitleAllThreads({ force: true });
+  fitBrandLines();
+  window.addEventListener("resize", fitBrandLines);
+  if (document.fonts?.ready) document.fonts.ready.then(fitBrandLines);
+  const mark = document.querySelector(".brand-wordmark");
+  if (mark) mark.addEventListener("load", fitBrandLines);
 })();

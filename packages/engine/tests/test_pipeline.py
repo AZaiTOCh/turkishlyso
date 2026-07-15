@@ -64,14 +64,16 @@ def test_hi0_json_smaller_or_equal():
     assert saved >= 0
 
 
-def test_optimize_prompt_only_saves_tokens():
+def test_optimize_chat_only_parity_passthrough():
+    """Bare chat (no attachment) must keep the exact user text for provider parity."""
     long_prompt = (
         "Please could you help me kindly analyze this and thank you "
         "would you summarize the key points as bullet points?"
     )
     result = optimize(prompt=long_prompt, target_engine="gpt-4o", enable_pxpipe=False)
-    assert result.meter.optimized_tokens <= result.meter.original_tokens
-    assert "lcs" in result.stages
+    assert result.envelope == long_prompt.strip()
+    assert "passthrough_parity" in result.stages
+    assert result.meter.optimized_tokens == result.meter.original_tokens
 
 
 def test_optimize_with_text_attachment_preserves_body():

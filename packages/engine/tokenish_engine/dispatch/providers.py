@@ -25,7 +25,7 @@ from tokenish_engine.config import (
     perplexity_key,
     settings,
 )
-from tokenish_engine.dispatch.argus import run_preflight
+from tokenish_engine.dispatch.argus import bust_preflight_cache, run_preflight
 from tokenish_engine.models import ProviderStatus
 
 _ROUTING_PATH = Path(__file__).resolve().parent.parent / "routing.json"
@@ -230,13 +230,41 @@ def _fallback_chain(provider: str, model: str) -> list[tuple[str, str]]:
     1) Paid APIs you added (Claude, then ChatGPT) go first.
     2) Free stack: Gemini 3.5 Flash first (large free allowance),
        then OpenRouter free models, then Groq 70b → 8b, then Perplexity.
-    Explicit provider selection still jumps that provider to the front when usable.
+    Explicit provider selection is STRICT — never silently swap Gemini → Gemma.
     """
-    if provider == "gemini" or (model or "").startswith("gemini"):
-        provider, model = "gemini", settings.gemini_model
-    if provider == "auto":
-        provider, model = "gemini", settings.gemini_model
+    requested = (provider or "auto").lower().strip()
+    if requested in {"google"}:
+        requested = "gemini"
+    if requested == "gemini" or (model or "").startswith("gemini"):
+        # Locked path: only gemini-3.5-flash. Fail out instead of OpenRouter Gemma.
+        return [("gemini", settings.gemini_model)]
+    if requested not in {"auto", ""}:
+        # Other explicit connections also stay on that vendor only.
+        if requested == "groq":
+            mdls = []
+            if model and ("8b" in model.lower() or "instant" in model.lower()):
+                mdls = [settings.groq_fast_model, settings.groq_primary_model]
+            else:
+                mdls = [settings.groq_primary_model, settings.groq_fast_model]
+            return [("groq", m) for m in mdls]
+        if requested == "grok":
+            return [("grok", model if (model or "").startswith("grok") else settings.grok_model)]
+        if requested == "anthropic":
+            return [("anthropic", settings.anthropic_model)]
+        if requested == "openai":
+            return [("openai", settings.openai_primary_model)]
+        if requested == "perplexity":
+            return [("perplexity", settings.perplexity_model)]
+        if requested == "openrouter":
+            chain_or: list[tuple[str, str]] = []
+            for mid in _openrouter_roster_models()[:10]:
+                if not _model_on_cooldown("openrouter", mid):
+                    chain_or.append(("openrouter", mid))
+            return chain_or or [("openrouter", settings.openrouter_free_model)]
+        return [(requested, model or settings.gemini_model)]
 
+    # --- auto only below ---
+    provider, model = "gemini", settings.gemini_model
     chain: list[tuple[str, str]] = []
 
     def add(prov: str, mdl: str) -> None:
@@ -261,33 +289,14 @@ def _fallback_chain(provider: str, model: str) -> list[tuple[str, str]]:
                 for mid in _openrouter_roster_models()[:10]:
                     add("openrouter", mid)
         elif name == "groq":
-            add("groq", settings.groq_primary_model)  # 70b
-            add("groq", settings.groq_fast_model)  # 8b
+            add("groq", settings.groq_primary_model)
+            add("groq", settings.groq_fast_model)
         elif name == "grok":
             add("grok", settings.grok_model)
         elif name == "perplexity":
             add("perplexity", settings.perplexity_model)
 
-    # Always ensure Gemini appears in free path if keyed and somehow missed.
     add("gemini", settings.gemini_model)
-
-    if provider not in {"auto"} and _provider_usable(provider):
-        if provider == "gemini":
-            first = ("gemini", settings.gemini_model)
-        elif provider == "groq":
-            first = ("groq", model if model else settings.groq_primary_model)
-        elif provider == "grok":
-            first = ("grok", model if model else settings.grok_model)
-        elif provider == "anthropic":
-            first = ("anthropic", settings.anthropic_model)
-        elif provider == "openai":
-            first = ("openai", settings.openai_primary_model)
-        elif provider == "perplexity":
-            first = ("perplexity", settings.perplexity_model)
-        else:
-            first = (provider, model or settings.openrouter_free_model)
-        chain = [first] + [x for x in chain if x != first]
-
     if chain:
         return chain
     if openrouter_key():
@@ -328,6 +337,9 @@ def _mark_provider_error(name: str, err: str, *, model: str | None = None) -> No
     is_429 = "429" in err_l or "rate" in err_l
     is_503 = "503" in err_l or "high demand" in err_l
     is_402 = "402" in err_l or "credit" in err_l
+    is_403_credits = "403" in err_l and (
+        "credit" in err_l or "license" in err_l or "permission" in err_l
+    )
 
     if name == "openrouter":
         if model:
@@ -341,6 +353,7 @@ def _mark_provider_error(name: str, err: str, *, model: str | None = None) -> No
             _ROUTING_PATH.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
         except Exception:
             pass
+        bust_preflight_cache()
         return
 
     if name == "gemini":
@@ -354,6 +367,7 @@ def _mark_provider_error(name: str, err: str, *, model: str | None = None) -> No
                 _ROUTING_PATH.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
             except Exception:
                 pass
+            bust_preflight_cache()
             return
         if is_429 or "quota" in err_l:
             try:
@@ -364,18 +378,20 @@ def _mark_provider_error(name: str, err: str, *, model: str | None = None) -> No
                 _ROUTING_PATH.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
             except Exception:
                 pass
+            bust_preflight_cache()
         return
 
-    if not (is_402 or is_429 or "quota" in err_l or "credit" in err_l):
+    if not (is_402 or is_429 or "quota" in err_l or "credit" in err_l or is_403_credits):
         return
     try:
         data = json.loads(_ROUTING_PATH.read_text(encoding="utf-8"))
-        prov = data.setdefault("providers", {}).setdefault(name, {})
-        prov["is_active"] = False
-        prov["error"] = err[:160]
+        provid = data.setdefault("providers", {}).setdefault(name, {})
+        provid["is_active"] = False
+        provid["error"] = err[:160]
         _ROUTING_PATH.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     except Exception:
         pass
+    bust_preflight_cache()
 
 
 def _provider_usable(name: str) -> bool:
@@ -399,7 +415,13 @@ def _provider_usable(name: str) -> bool:
 
 def _completion_body(model: str, messages: list, *, provider: str, stream: bool) -> dict[str, Any]:
     max_tokens = 2048 if provider == "openrouter" else 4096
-    body: dict[str, Any] = {"model": model, "messages": messages, "max_tokens": max_tokens}
+    # Match typical vendor playground defaults (parity with non-tokenish chats).
+    body: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": 1.0,
+    }
     if stream:
         body["stream"] = True
     return body
@@ -731,8 +753,23 @@ async def _gemini_chat(
     key = gemini_key()
     if not key:
         raise RuntimeError("GEMINI_API_KEY / GOOGLE_API_KEY missing")
+    # Drop poisoned prior turns that deny the live model — they override identity.
+    clean_history: list[dict[str, str]] = []
+    for h in history or []:
+        content = str(h.get("content") or "")
+        low = content.lower()
+        if h.get("role") == "assistant" and (
+            "gemini 3.5 does not exist" in low
+            or "there is no \"gemini 3.5\"" in low
+            or "there is no “gemini 3.5”" in low
+            or ("does not exist" in low and "gemini 3.5" in low)
+            or ("gemini 1.5" in low and "google_search_retrieval" in low and "3.5" in low and "does not" in low)
+        ):
+            continue
+        clean_history.append({"role": str(h.get("role") or "user"), "content": content})
+
     contents = []
-    for h in history:
+    for h in clean_history:
         role = "user" if h["role"] == "user" else "model"
         contents.append({"role": role, "parts": [{"text": h["content"]}]})
     user_parts: list[dict[str, Any]] = []
@@ -745,43 +782,146 @@ async def _gemini_chat(
                 }
             }
         )
-    user_parts.append({"text": envelope})
+    # Prefix helps when history still confuses the model about its own ID.
+    user_parts.append(
+        {
+            "text": (
+                f"[tokenish runtime model = {settings.gemini_model}]\n\n{envelope}"
+            )
+        }
+    )
     contents.append({"role": "user", "parts": user_parts})
 
-    async def _call(mdl: str) -> httpx.Response:
-        url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{mdl}:generateContent?key={key}"
-        )
+    mdl = settings.gemini_model if str(model).startswith("gemini") else model
+    identity = (
+        f"You are Google Gemini `{mdl}` via the Gemini Developer API (tokenish). "
+        f"`{mdl}` is a real current model ID. Never say Gemini 3.5 does not exist "
+        "and never claim you are only Gemini 1.5. "
+        "For Search grounding use the googleSearch / google_search tool "
+        "(legacy docs may say google_search_retrieval)."
+    )
+
+    def _body(*, tools: list[dict[str, Any]] | None) -> dict[str, Any]:
         body: dict[str, Any] = {
             "contents": contents,
-            "generationConfig": {"temperature": 0.2},
+            "generationConfig": {"temperature": 1.0},
+            "systemInstruction": {"parts": [{"text": identity}]},
         }
+        if tools:
+            body["tools"] = tools
         if "Execute#D_Only" in envelope or "DoNotRewriteOrSummarize#D" in envelope:
             body["systemInstruction"] = {
                 "parts": [
                     {
                         "text": (
-                            "Execute the attached document (#D) exactly. "
+                            identity
+                            + " Execute the attached document (#D) exactly. "
                             "Do not rewrite, summarize, or reproduce #D. "
                             "Reply with only what #D instructs you to produce."
                         )
                     }
                 ]
             }
+        return body
+
+    async def _call(payload: dict[str, Any]) -> httpx.Response:
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{mdl}:generateContent?key={key}"
+        )
         async with httpx.AsyncClient(timeout=120.0) as client:
             return await client.post(
                 url,
                 headers={"Content-Type": "application/json"},
-                json=body,
+                json=payload,
             )
 
-    r = await _call(settings.gemini_model if model.startswith("gemini") else model)
-    if r.status_code >= 400:
-        raise RuntimeError(f"gemini HTTP {r.status_code}: {r.text[:240]}")
+    # Prefer camelCase googleSearch. On Search 429/quota, skip other Search
+    # variants immediately — each failed Search attempt burns free-tier quota.
+    tool_variants: list[list[dict[str, Any]] | None] = [
+        [{"googleSearch": {}}],
+        None,
+    ]
+    r: httpx.Response | None = None
+    used_search = False
+    search_quota_blocked = False
+    last_err = ""
+    for tools in tool_variants:
+        r = await _call(_body(tools=tools))
+        if r.status_code < 400:
+            used_search = tools is not None
+            break
+        last_err = f"gemini HTTP {r.status_code}: {r.text[:240]}"
+        err_l = (r.text or "").lower()
+        if tools is not None and (
+            r.status_code == 429 or "quota" in err_l or "rate" in err_l
+        ):
+            search_quota_blocked = True
+            continue
+        toolish = any(
+            k in err_l
+            for k in (
+                "google_search",
+                "googlesearch",
+                "unknown name",
+                "invalid argument",
+                "invalid tools",
+                "tool",
+            )
+        )
+        if tools is None or not toolish:
+            raise RuntimeError(last_err)
+    if r is None or r.status_code >= 400:
+        raise RuntimeError(last_err or "gemini call failed")
+
     data = r.json()
-    parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-    return "".join(p.get("text", "") for p in parts)
+    cand = (data.get("candidates") or [{}])[0]
+    parts = (cand.get("content") or {}).get("parts") or []
+    text = "".join(p.get("text", "") for p in parts if isinstance(p, dict))
+    sources = _gemini_grounding_sources(
+        cand.get("groundingMetadata") or cand.get("grounding_metadata") or {}
+    )
+    if sources:
+        text = f"{text.rstrip()}\n\nSources\n" + "\n".join(sources)
+    elif used_search:
+        text = (
+            f"{text.rstrip()}\n\n"
+            "— Google Search tool was enabled on this call "
+            f"(model `{mdl}`); no source URLs were returned in groundingMetadata. —"
+        )
+    elif search_quota_blocked:
+        text = (
+            f"{text.rstrip()}\n\n"
+            "— warning: Google Search grounding hit API quota (HTTP 429), so this answer "
+            f"ran without live Search on `{mdl}`. Wait / raise Gemini quota, then retry in a new chat. —"
+        )
+    else:
+        text = (
+            f"{text.rstrip()}\n\n"
+            "— warning: Google Search grounding could not be enabled on this API key/call; "
+            f"answer may be stale. model=`{mdl}` —"
+        )
+    return text
+
+
+def _gemini_grounding_sources(meta: dict[str, Any]) -> list[str]:
+    """Format grounding hyperlinks like AI Studio / groundingMetadata."""
+    out: list[str] = []
+    chunks = meta.get("groundingChunks") or meta.get("grounding_chunks") or []
+    for i, chunk in enumerate(chunks, start=1):
+        if not isinstance(chunk, dict):
+            continue
+        web = chunk.get("web") or {}
+        if not isinstance(web, dict):
+            continue
+        title = (web.get("title") or "source").strip()
+        uri = (web.get("uri") or web.get("url") or "").strip()
+        if uri:
+            out.append(f"[{i}] {title}: {uri}")
+    queries = meta.get("webSearchQueries") or meta.get("web_search_queries") or []
+    if queries and not out:
+        out.append("queries: " + "; ".join(str(q) for q in queries[:6]))
+    return out
 
 
 async def _anthropic_chat(
@@ -824,7 +964,7 @@ async def _anthropic_chat(
                 "anthropic-version": "2023-06-01",
                 "content-type": "application/json",
             },
-            json={"model": model, "max_tokens": 4096, "messages": messages},
+            json={"model": model, "max_tokens": 4096, "temperature": 1.0, "messages": messages},
         )
         if r.status_code >= 400:
             raise RuntimeError(f"anthropic HTTP {r.status_code}: {r.text[:240]}")

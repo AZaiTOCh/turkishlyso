@@ -1,8 +1,9 @@
 """
-NeoBorg — benevolent hive TOKEX clock agent.
+Neoborg — benevolent hive TOKEX clock agent.
 
-Receives Mrs. Brown handoffs, fact-checks them again, keeps a local ledger,
-and (when opted in) broadcasts vetted deltas to the Live World Counter Clock hive.
+Receives Mrs. Brown handoffs, fact-checks them again, keeps a slim local
+counter for hive sync, and (when opted in) broadcasts vetted deltas.
+Does NOT re-archive Rainman/Agatha briefs — one markdown file per run only.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ def _load_ledger() -> dict[str, Any]:
     path = _ledger_path()
     if not path.exists():
         return {
-            "agent": "NeoBorg",
+            "agent": "Neoborg",
             "contributions": 0,
             "global_saved_tokex": 0,
             "global_total_tokex": 0,
@@ -33,16 +34,18 @@ def _load_ledger() -> dict[str, Any]:
             "entries": [],
         }
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return {
-            "agent": "NeoBorg",
+            "agent": "Neoborg",
             "contributions": 0,
             "global_saved_tokex": 0,
             "global_total_tokex": 0,
             "updated_ts": None,
             "entries": [],
         }
+    data["agent"] = "Neoborg"
+    return data
 
 
 def _save_ledger(data: dict[str, Any]) -> None:
@@ -60,7 +63,7 @@ def _broadcast_sync(saved: int, total: int) -> dict[str, Any]:
 def cross_vet_and_record(handoff: dict[str, Any] | None) -> dict[str, Any]:
     if not handoff:
         return {
-            "agent": "NeoBorg",
+            "agent": "Neoborg",
             "accepted": False,
             "reason": "empty handoff",
             "broadcast": False,
@@ -71,7 +74,7 @@ def cross_vet_and_record(handoff: dict[str, Any] | None) -> dict[str, Any]:
         total = int(handoff.get("total_tokex") or 0)
     except (TypeError, ValueError):
         return {
-            "agent": "NeoBorg",
+            "agent": "Neoborg",
             "accepted": False,
             "reason": "handoff tokex not numeric",
             "broadcast": False,
@@ -79,7 +82,7 @@ def cross_vet_and_record(handoff: dict[str, Any] | None) -> dict[str, Any]:
         }
     if saved < 0 or total < 0 or (total > 0 and saved > total):
         return {
-            "agent": "NeoBorg",
+            "agent": "Neoborg",
             "accepted": False,
             "reason": "handoff fails cross-vet (impossible tokex relationship)",
             "broadcast": False,
@@ -91,17 +94,11 @@ def cross_vet_and_record(handoff: dict[str, Any] | None) -> dict[str, Any]:
     ledger["global_saved_tokex"] = int(ledger.get("global_saved_tokex") or 0) + saved
     ledger["global_total_tokex"] = int(ledger.get("global_total_tokex") or 0) + total
     ledger["updated_ts"] = time.time()
-    entries = list(ledger.get("entries") or [])
-    entries.append(
-        {
-            "ts": ledger["updated_ts"],
-            "saved_tokex": saved,
-            "total_tokex": total,
-            "cylinders_fired": handoff.get("cylinders_fired") or [],
-        }
-    )
-    ledger["entries"] = entries[-200:]
-    ledger["agent"] = "NeoBorg"
+    # Slim counter only — no brief re-archive (Agatha owns ~/.tokenish/output/runs/*.md).
+    ledger["entries"] = (list(ledger.get("entries") or []) + [
+        {"ts": ledger["updated_ts"], "saved_tokex": saved, "total_tokex": total}
+    ])[-50:]
+    ledger["agent"] = "Neoborg"
     _save_ledger(ledger)
 
     saved_sum = int(ledger["global_saved_tokex"])
@@ -111,7 +108,7 @@ def cross_vet_and_record(handoff: dict[str, Any] | None) -> dict[str, Any]:
     hive = _broadcast_sync(saved, total)
 
     return {
-        "agent": "NeoBorg",
+        "agent": "Neoborg",
         "accepted": True,
         "reason": "ok",
         "broadcast": bool(hive.get("broadcast")),
@@ -133,7 +130,7 @@ def clock_snapshot() -> dict[str, Any]:
     total_sum = int(ledger.get("global_total_tokex") or 0)
     pct = round((saved_sum / total_sum) * 100.0, 2) if total_sum else 0.0
     return {
-        "agent": "NeoBorg",
+        "agent": "Neoborg",
         "broadcast": False,
         "saved_tokex": saved_sum,
         "total_tokex": total_sum,

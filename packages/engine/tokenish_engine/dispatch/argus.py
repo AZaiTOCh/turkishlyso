@@ -251,6 +251,72 @@ async def _refresh_openrouter_roster(routing: dict[str, Any]) -> list[str]:
 _PREFLIGHT_CACHE: dict[str, Any] = {"at": 0.0, "statuses": [], "meta": {}}
 _PREFLIGHT_TTL_SECS = 120.0
 
+_HARD_BLOCK_HINTS = (
+    "credit",
+    "quota",
+    "429",
+    "402",
+    "403",
+    "license",
+    "resource_exhausted",
+    "permission-denied",
+)
+
+
+def bust_preflight_cache() -> None:
+    """Drop Argus cache so /providers reflects chat-time quota/credit failures."""
+    _PREFLIGHT_CACHE["at"] = 0.0
+    _PREFLIGHT_CACHE["statuses"] = []
+
+
+def _is_quota_error(err: str) -> bool:
+    e = (err or "").lower()
+    return (
+        "429" in e
+        or "402" in e
+        or "quota" in e
+        or "credit" in e
+        or "resource_exhausted" in e
+    )
+
+
+def _is_no_credits_error(err: str) -> bool:
+    e = (err or "").lower()
+    return (
+        "credit" in e
+        or "license" in e
+        or "402" in e
+        or ("403" in e and ("permission" in e or "team" in e))
+    )
+
+
+def classify_provider_health(name: str, has_key: bool, slot: dict[str, Any] | None = None) -> tuple[bool, str, str]:
+    """
+    Returns (usable, reason, hint) for UI soft grey-out.
+    reason: ok | missing_key | quota | no_credits | error
+    """
+    del name  # reserved for per-provider nuance later
+    slot = slot or {}
+    if not has_key:
+        return False, "missing_key", "link a key in manage connections"
+    err = str(slot.get("error") or "")
+    err_l = err.lower()
+    active = slot.get("is_active")
+    if _is_no_credits_error(err):
+        return False, "no_credits", "add credits on the provider site"
+    if "429" in err_l or "resource_exhausted" in err_l or "quota" in err_l:
+        return False, "quota", "out of calls — check back soon"
+    if active is False and err_l:
+        if "rate" in err_l:
+            return False, "quota", "out of calls — check back soon"
+        return False, "error", "check back soon"
+    return True, "ok", ""
+
+
+def _hard_block_error(err: str) -> bool:
+    e = (err or "").lower()
+    return any(k in e for k in _HARD_BLOCK_HINTS)
+
 
 async def run_preflight(*, force: bool = False) -> tuple[list[ProviderStatus], dict[str, Any]]:
     """Argus preflight: live probes + linked-API inventory + routing refresh."""
@@ -260,10 +326,35 @@ async def run_preflight(*, force: bool = False) -> tuple[list[ProviderStatus], d
         and _PREFLIGHT_CACHE["statuses"]
         and now - float(_PREFLIGHT_CACHE["at"]) < _PREFLIGHT_TTL_SECS
     ):
-        # Always refresh linked-key inventory (cheap, must match launch greying).
+        # Cheap path: refresh linked keys + re-classify from live routing.json
+        # so chat-time quota marks show without waiting for TTL.
         meta = dict(_PREFLIGHT_CACHE["meta"] or {})
         meta["linked_keys"] = linked_inventory()
-        return _PREFLIGHT_CACHE["statuses"], meta
+        routing = _load_routing()
+        providers_cfg = routing.get("providers", {})
+        linked = linked_provider_status()
+        refreshed: list[ProviderStatus] = []
+        for s in _PREFLIGHT_CACHE["statuses"]:
+            slot = providers_cfg.get(s.name, {})
+            has_key = bool(linked.get(s.name))
+            usable, reason, hint = classify_provider_health(s.name, has_key, slot)
+            detail = s.detail
+            if reason == "missing_key":
+                detail = "no key linked"
+            elif hint and reason != "ok":
+                detail = hint
+            refreshed.append(
+                ProviderStatus(
+                    name=s.name,
+                    available=usable,
+                    detail=detail,
+                    models=list(s.models or []),
+                    reason=reason,
+                    hint=hint,
+                    usable=usable,
+                )
+            )
+        return refreshed, meta
 
     routing = _load_routing()
     providers_cfg = routing.setdefault("providers", {})
@@ -285,6 +376,7 @@ async def run_preflight(*, force: bool = False) -> tuple[list[ProviderStatus], d
             gemini_ok = ok
             if not ok and _is_quota_error(gemini_err):
                 gemini_err = "quota exceeded"
+                gemini_ok = False
             # 503 high demand is transient — keep provider active for alt-model retries
             if not ok and "503" in (gemini_err or ""):
                 gemini_ok = True
@@ -292,52 +384,81 @@ async def run_preflight(*, force: bool = False) -> tuple[list[ProviderStatus], d
             providers_cfg.setdefault("gemini", {})["last_ping"] = _now()
             providers_cfg["gemini"].update(
                 {
-                    "is_active": True if gemini_key() else False,
+                    "is_active": bool(gemini_key()) and gemini_ok,
                     "model_name": gemini_model,
                     "latency_ms": gemini_ms,
                     "error": gemini_err or None,
                 }
             )
         else:
-            gemini_ms = int(providers_cfg.get("gemini", {}).get("latency_ms", 0))
-            gemini_ok = bool(gemini_key())
+            slot_g = providers_cfg.get("gemini", {})
+            gemini_ms = int(slot_g.get("latency_ms", 0))
+            gemini_err = str(slot_g.get("error") or "")
+            if slot_g.get("is_active") is False or _is_quota_error(gemini_err):
+                gemini_ok = False
+            else:
+                gemini_ok = bool(gemini_key())
 
     # OpenRouter roster
     or_models = await _refresh_openrouter_roster(routing)
     or_ok = bool(openrouter_key()) and bool(or_models)
-    providers_cfg.setdefault("openrouter", {})["is_active"] = or_ok
+    or_slot = providers_cfg.setdefault("openrouter", {})
+    # Don't wipe a hard failure just because roster fetch looked fine.
+    if or_ok and not _hard_block_error(str(or_slot.get("error") or "")):
+        or_slot["is_active"] = True
+    elif not openrouter_key():
+        or_slot["is_active"] = False
+    else:
+        or_slot["is_active"] = bool(or_ok) and or_slot.get("is_active", True) is not False
 
-    # Sync key_linked / is_active from factual inventory (UI greying source of truth).
+    # Sync key_linked; preserve hard quota/credit blocks from chat failures.
     for pname, has_key in linked.items():
         slot = providers_cfg.setdefault(pname, {})
         slot["key_linked"] = bool(has_key)
         if pname in {"gemini", "openrouter"}:
             # Live probe owns is_active for these; inventory only stamps key_linked.
             continue
-        slot["is_active"] = bool(has_key)
+        if not has_key:
+            slot["is_active"] = False
+            continue
+        if slot.get("is_active") is False and _hard_block_error(str(slot.get("error") or "")):
+            continue
+        slot["is_active"] = True
 
     _save_routing(routing)
     meta["openrouter_free_roster"] = or_models
     meta["preferred"] = _pick_preferred(False, gemini_ok, or_ok)
 
-    def _detail_for(name: str) -> tuple[bool, str, list[str]]:
+    def _detail_for(name: str) -> tuple[bool, str, list[str], bool, str, str]:
+        slot = providers_cfg.get(name, {})
         if name == "gemini":
-            avail = bool(gemini_key())
-            detail = (
-                f"{gemini_model} OK {gemini_ms}ms"
-                if gemini_ok and gemini_ms
-                else (gemini_err or ("key linked" if avail else "no key linked"))
-            )
-            return avail, detail, [settings.gemini_model]
+            has_key = bool(gemini_key())
+            usable, reason, hint = classify_provider_health(name, has_key, slot)
+            if reason == "ok" and gemini_ok and gemini_ms:
+                detail = f"{gemini_model} OK {gemini_ms}ms"
+            elif reason == "missing_key":
+                detail = "no key linked"
+            elif hint:
+                detail = hint
+            else:
+                detail = gemini_err or ("key linked" if has_key else "no key linked")
+            return has_key, detail, [settings.gemini_model], usable, reason, hint
         if name == "openrouter":
-            avail = or_ok
-            detail = (
-                f"{len(or_models)} free models"
-                if or_ok
-                else ("no key linked" if not openrouter_key() else "no free models")
-            )
-            return avail, detail, (or_models[:8] or [settings.openrouter_free_model])
-        # Other providers: inventory only (specialization preserved — no dilute live pings).
+            has_key = bool(openrouter_key())
+            usable, reason, hint = classify_provider_health(name, has_key, slot)
+            if reason == "ok" and or_ok:
+                detail = f"{len(or_models)} free models"
+            elif reason == "missing_key":
+                detail = "no key linked"
+            elif hint:
+                detail = hint
+            else:
+                detail = "no free models" if has_key else "no key linked"
+            # Roster empty still means not really usable for chat.
+            if reason == "ok" and has_key and not or_ok:
+                usable, reason, hint = False, "error", "check back soon"
+                detail = "no free models"
+            return has_key, detail, (or_models[:8] or [settings.openrouter_free_model]), usable, reason, hint
         key_fns = {
             "openai": openai_key,
             "anthropic": anthropic_key,
@@ -353,29 +474,33 @@ async def run_preflight(*, force: bool = False) -> tuple[list[ProviderStatus], d
             "grok": [settings.grok_model],
         }
         fn = key_fns.get(name)
-        avail = bool(fn()) if fn else False
-        return avail, ("key linked" if avail else "no key linked"), models.get(name, [])
+        has_key = bool(fn()) if fn else False
+        usable, reason, hint = classify_provider_health(name, has_key, slot)
+        if reason == "missing_key":
+            detail = "no key linked"
+        elif hint:
+            detail = hint
+        else:
+            detail = "key linked"
+        return has_key, detail, models.get(name, []), usable, reason, hint
 
     statuses: list[ProviderStatus] = []
     for name in PROVIDER_ORDER:
-        avail, detail, models = _detail_for(name)
+        _avail, detail, models, usable, reason, hint = _detail_for(name)
         statuses.append(
-            ProviderStatus(name=name, available=avail, detail=detail, models=models)
+            ProviderStatus(
+                name=name,
+                available=usable,
+                detail=detail,
+                models=models,
+                reason=reason,
+                hint=hint,
+                usable=usable,
+            )
         )
 
     _PREFLIGHT_CACHE.update({"at": time.time(), "statuses": statuses, "meta": meta})
     return statuses, meta
-
-
-def _is_quota_error(err: str) -> bool:
-    e = (err or "").lower()
-    return (
-        "429" in e
-        or "402" in e
-        or "quota" in e
-        or "credit" in e
-        or "resource_exhausted" in e
-    )
 
 
 def _should_deactivate(err: str) -> bool:
@@ -398,8 +523,13 @@ def _fallback_list() -> list[str]:
 
 
 def _pick_preferred(openai_ok: bool, gemini_ok: bool, or_ok: bool) -> dict[str, str]:
-    if gemini_ok or gemini_key():
+    # Never prefer a door we already know is quota-dead.
+    if gemini_ok:
         return {"provider": "gemini", "model": settings.gemini_model}
-    if or_ok or openrouter_key():
+    if or_ok:
         return {"provider": "openrouter", "model": settings.openrouter_free_model}
+    if openrouter_key():
+        return {"provider": "openrouter", "model": settings.openrouter_free_model}
+    if gemini_key():
+        return {"provider": "gemini", "model": settings.gemini_model}
     return {"provider": "auto", "model": settings.gemini_model}

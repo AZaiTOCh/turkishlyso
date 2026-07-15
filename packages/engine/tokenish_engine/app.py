@@ -121,7 +121,7 @@ async def tokex_clock_get() -> dict[str, Any]:
 
 @app.post("/hive/contribute")
 async def hive_contribute(payload: HiveContributePayload) -> dict[str, Any]:
-    """Accept a vetted NeoBorg contribution into the engine-local hive store."""
+    """Accept a vetted Neoborg contribution into the engine-local hive store."""
     from tokenish_engine import hive_store
 
     try:
@@ -177,6 +177,28 @@ async def tokex_clock_status() -> dict[str, Any]:
         "node_id": node_id(),
         "clock": clock,
     }
+
+
+@app.get("/scoreboard")
+async def get_scoreboard() -> dict[str, Any]:
+    from tokenish_engine.agents.agatha import scoreboard_payload
+
+    return {"ok": True, **scoreboard_payload()}
+
+
+class GrettPayload(BaseModel):
+    need: str = ""
+
+
+@app.post("/grett/recommend")
+async def grett_recommend_route(payload: GrettPayload) -> dict[str, Any]:
+    try:
+        from tokenish_engine.agents.grett import recommend
+
+        return {"ok": True, **recommend(payload.need, linked=_provider_key_status())}
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+
 
 def _provider_key_status() -> dict[str, bool]:
     """Which providers already have a key (config + env + Settings/.env helpers)."""
@@ -282,8 +304,12 @@ async def set_keys(payload: KeysPayload):
 
 
 @app.get("/providers")
-async def providers() -> dict[str, Any]:
+async def providers(force: bool = False) -> dict[str, Any]:
     apply_saved_keys_to_environ()
+    if force:
+        from tokenish_engine.dispatch.argus import bust_preflight_cache
+
+        bust_preflight_cache()
     statuses, meta = await preflight_full()
     inv = linked_inventory()
     return {

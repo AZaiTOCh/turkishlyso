@@ -1,5 +1,5 @@
 """
-Live World Counter Clock — NeoBorg hive client + local clock surface.
+Live World Counter Clock — Neoborg hive client + local clock surface.
 
 Architecture (v1 = option B):
   Local tokenish engines POST vetted TOKEX savings to a tiny always-on hive API
@@ -91,7 +91,7 @@ def _save_cache(data: dict[str, Any]) -> None:
 
 def _empty_clock(*, source: str, online: bool, note: str = "") -> dict[str, Any]:
     return {
-        "agent": "NeoBorg",
+        "agent": "Neoborg",
         "clock": "Live World Counter Clock",
         "online": online,
         "broadcast": online,
@@ -127,7 +127,7 @@ def sync_lifetime_sync(saved_tokex: int, total_tokex: int) -> dict[str, Any]:
         "total_tokex": total,
         "mode": "absolute",
         "ts": time.time(),
-        "agent": "NeoBorg",
+        "agent": "Neoborg",
     }
     if not url:
         try:
@@ -161,7 +161,7 @@ async def fetch_live_clock() -> dict[str, Any]:
     if not url:
         snap = hive_store.snapshot()
         return {
-            "agent": "NeoBorg",
+            "agent": "Neoborg",
             "clock": "Live World Counter Clock",
             "online": True,
             "broadcast": hive_opt_in(),
@@ -213,7 +213,7 @@ async def fetch_live_clock() -> dict[str, Any]:
     total = int(data.get("total_tokex") or 0)
     pct = round((saved / total) * 100.0, 2) if total else float(data.get("saved_pct") or 0.0)
     out = {
-        "agent": "NeoBorg",
+        "agent": "Neoborg",
         "clock": "Live World Counter Clock",
         "online": True,
         "broadcast": True,
@@ -253,7 +253,7 @@ def broadcast_contribution_sync(saved_tokex: int, total_tokex: int) -> dict[str,
         "saved_tokex": saved,
         "total_tokex": total,
         "ts": time.time(),
-        "agent": "NeoBorg",
+        "agent": "Neoborg",
     }
     if not url:
         try:
