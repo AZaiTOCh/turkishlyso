@@ -56,6 +56,20 @@ def _cooldown_expired(roster: dict[str, Any]) -> bool:
 
 def _gemini_ping_due(routing: dict[str, Any]) -> bool:
     prov = routing.get("providers", {}).get("gemini", {})
+    # Stale quota marks must re-probe soon — free-tier windows reset; do not
+    # wait the full 12h health cooldown while UI says "check back soon".
+    if _gemini_quota_block_active(prov) is False and (
+        prov.get("is_active") is False
+        or _is_quota_error(str(prov.get("error") or ""))
+    ):
+        last = prov.get("last_ping") or ""
+        if not last:
+            return True
+        try:
+            ts = datetime.strptime(last, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            return (datetime.now(timezone.utc) - ts).total_seconds() >= 900  # 15m
+        except Exception:
+            return True
     last = prov.get("last_ping") or ""
     if not last:
         return True
@@ -64,6 +78,29 @@ def _gemini_ping_due(routing: dict[str, Any]) -> bool:
         return (datetime.now(timezone.utc) - ts).total_seconds() >= _GEMINI_COOLDOWN_SECS
     except Exception:
         return True
+
+
+def _gemini_quota_block_active(slot: dict[str, Any] | None) -> bool | None:
+    """
+    True = still blocked, False = block expired / clearable, None = no block metadata.
+    """
+    slot = slot or {}
+    until = slot.get("blocked_until")
+    if until:
+        try:
+            if isinstance(until, (int, float)):
+                return time.time() < float(until)
+            ts = datetime.strptime(str(until), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            return datetime.now(timezone.utc) < ts
+        except Exception:
+            return None
+    err = str(slot.get("error") or "").lower()
+    if slot.get("is_active") is False and (
+        "quota" in err or "429" in err or "resource_exhausted" in err
+    ):
+        # Legacy sticky mark (no blocked_until): treat as expired so we re-probe.
+        return False
+    return None
 
 
 async def _test_openai(model: str) -> tuple[bool, int, str]:
@@ -295,7 +332,6 @@ def classify_provider_health(name: str, has_key: bool, slot: dict[str, Any] | No
     Returns (usable, reason, hint) for UI soft grey-out.
     reason: ok | missing_key | quota | no_credits | error
     """
-    del name  # reserved for per-provider nuance later
     slot = slot or {}
     if not has_key:
         return False, "missing_key", "link a key in manage connections"
@@ -304,6 +340,16 @@ def classify_provider_health(name: str, has_key: bool, slot: dict[str, Any] | No
     active = slot.get("is_active")
     if _is_no_credits_error(err):
         return False, "no_credits", "add credits on the provider site"
+    if name == "gemini":
+        block = _gemini_quota_block_active(slot)
+        if block is True:
+            hint = "out of calls — check back soon"
+            if "free_tier_requests" in err_l or "limit: 20" in err_l:
+                hint = "free API request limit hit — wait ~1–2 min, then retry"
+            return False, "quota", hint
+        # Expired / legacy sticky quota: do not keep greying after free tier resets.
+        if block is False:
+            return True, "ok", ""
     if "429" in err_l or "resource_exhausted" in err_l or "quota" in err_l:
         return False, "quota", "out of calls — check back soon"
     if active is False and err_l:
@@ -388,13 +434,25 @@ async def run_preflight(*, force: bool = False) -> tuple[list[ProviderStatus], d
                     "model_name": gemini_model,
                     "latency_ms": gemini_ms,
                     "error": gemini_err or None,
+                    "blocked_until": None if gemini_ok else providers_cfg.get("gemini", {}).get("blocked_until"),
                 }
             )
+            if gemini_ok:
+                providers_cfg["gemini"]["blocked_until"] = None
+                providers_cfg["gemini"]["error"] = None
+                providers_cfg["gemini"]["is_active"] = True
         else:
             slot_g = providers_cfg.get("gemini", {})
             gemini_ms = int(slot_g.get("latency_ms", 0))
             gemini_err = str(slot_g.get("error") or "")
-            if slot_g.get("is_active") is False or _is_quota_error(gemini_err):
+            block = _gemini_quota_block_active(slot_g)
+            if block is True:
+                gemini_ok = False
+            elif block is False:
+                # Force a live probe on next due path; treat as usable for UI now.
+                gemini_ok = bool(gemini_key())
+                gemini_err = ""
+            elif slot_g.get("is_active") is False or _is_quota_error(gemini_err):
                 gemini_ok = False
             else:
                 gemini_ok = bool(gemini_key())

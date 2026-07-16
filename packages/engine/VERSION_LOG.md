@@ -6,6 +6,18 @@ Factual release ledger. Updated when a version is committed.
 
 ---
 
+## v0.4.2 — Vision routing + Gemini quota recovery
+
+- **DoP:** Jul 15, 2026 · ~9:55 PM – ~10:40 PM EST
+- Package version **0.4.2**.
+
+### Briefs
+- **OpenRouter + photos:** vision chain prefers VL/Gemma; skips text-only free IDs that 404 on image input; clearer privacy/data-policy and “busy vision” errors.
+- **Gemini grey-out:** quota blocks are time-bounded (honor Google “retry in Xs”); sticky forever-grey fixed; successful calls clear the mark; free-tier request-limit hint.
+- **Auto + images:** do not silently strip vision onto Groq/text-only doors.
+
+---
+
 ## v0.4.1 — Grett router + provider health UX
 
 - **DoP:** Jul 14–15, 2026 · overnight through ~10:05 AM EST

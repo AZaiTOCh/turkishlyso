@@ -1,5 +1,5 @@
 """
-Grett — LLM protoprompter, qualifier, and router (v0.4.1).
+Grett — LLM protoprompter, qualifier, and router (v0.4.2).
 
 Keeps talk short for everyday users. Chooses from a *curated* capability map
 and Argus-linked providers. Does NOT invent “latest news winners” from raw

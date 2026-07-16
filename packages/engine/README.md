@@ -1,6 +1,6 @@
 # Tokenish Engine
 
-FastAPI Split-Execution / tokopt optimizer (**v0.4.1**).
+FastAPI Split-Execution / tokopt optimizer (**v0.4.2**).
 
 ```bash
 pip install -e ".[dev]"

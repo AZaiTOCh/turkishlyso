@@ -42,8 +42,23 @@ _OR_SKIP_SUBSTRINGS = (
     "embed",
     "moderation",
     "hy3",
-    "-vl:",
-    "vl:",
+)
+
+# Free OpenRouter IDs that reject image payloads (HTTP 404 "image input").
+_OR_TEXT_ONLY_SUBSTRINGS = (
+    "llama-3.3-70b",
+    "llama-3.2-3b",
+    "llama-3.2-1b",
+    "qwen3-coder",
+    "qwen3-next",
+    "dolphin-mistral",
+    "hermes-3",
+    "gpt-oss",
+    "nemotron-3-nano-30b",
+    "nemotron-3-super",
+    "nemotron-3-ultra",
+    "north-mini-code",
+    "laguna",
 )
 
 
@@ -64,9 +79,20 @@ def _set_model_cooldown(provider: str, model: str, seconds: float | None = None)
     _MODEL_COOLDOWN[_cooldown_key(provider, model)] = time.time() + (seconds or _COOLDOWN_SECS)
 
 
-def _openrouter_roster_models() -> list[str]:
+def _openrouter_model_accepts_images(model_id: str) -> bool:
+    """Heuristic: free VL endpoints + Gemma 4 (accepts images; text-only free IDs do not)."""
+    low = (model_id or "").lower()
+    if any(s in low for s in _OR_TEXT_ONLY_SUBSTRINGS):
+        return False
+    if any(s in low for s in ("-vl", ":vl", "vision", "pixtral", "gemma-4", "gemma-3")):
+        return True
+    # Unknown free IDs: do not assume vision (avoid 404 spam).
+    return False
+
+
+def _openrouter_roster_models(*, for_images: bool = False) -> list[str]:
     """Chat-capable free models from routing roster, preferred first."""
-    preferred = [
+    preferred_text = [
         "google/gemma-4-31b-it:free",
         "google/gemma-4-26b-a4b-it:free",
         "meta-llama/llama-3.3-70b-instruct:free",
@@ -78,6 +104,13 @@ def _openrouter_roster_models() -> list[str]:
         "nousresearch/hermes-3-llama-3.1-405b:free",
         settings.openrouter_free_model,
     ]
+    preferred_vision = [
+        "nvidia/nemotron-nano-12b-v2-vl:free",
+        "google/gemma-4-31b-it:free",
+        "google/gemma-4-26b-a4b-it:free",
+        settings.openrouter_free_model,
+    ]
+    preferred = preferred_vision if for_images else preferred_text
     roster: list[str] = []
     try:
         data = json.loads(_ROUTING_PATH.read_text(encoding="utf-8"))
@@ -93,16 +126,28 @@ def _openrouter_roster_models() -> list[str]:
             continue
         if any(s in low for s in _OR_SKIP_SUBSTRINGS):
             continue
+        # Text chat: skip dedicated VL endpoints (heavier / often rate-limited).
+        if not for_images and ("-vl" in low or "vision" in low or "pixtral" in low):
+            continue
+        if for_images and not _openrouter_model_accepts_images(mid):
+            continue
         if _model_on_cooldown("openrouter", mid):
             continue
         out.append(mid)
     if not out:
-        # Last resort: cooled models + meta-router
+        # Last resort: cooled models (still respect vision filter).
         for mid in merged:
-            if mid.strip() == "openrouter/free" or not _model_on_cooldown("openrouter", mid):
-                out.append(mid)
-                if len(out) >= 3:
-                    break
+            if mid.strip() == "openrouter/free":
+                continue
+            if for_images and not _openrouter_model_accepts_images(mid):
+                continue
+            if not for_images and ("-vl" in mid.lower() or "vision" in mid.lower()):
+                continue
+            out.append(mid)
+            if len(out) >= 3:
+                break
+    if for_images:
+        return out or [m for m in preferred_vision if m != "openrouter/free"][:3]
     return out or [settings.openrouter_free_model]
 
 
@@ -224,13 +269,19 @@ def _pref_list() -> list[str]:
     return [p.strip().lower() for p in raw.split(",") if p.strip()]
 
 
-def _fallback_chain(provider: str, model: str) -> list[tuple[str, str]]:
+def _fallback_chain(
+    provider: str,
+    model: str,
+    *,
+    has_images: bool = False,
+) -> list[tuple[str, str]]:
     """
     Auto stack (everyday explanation):
     1) Paid APIs you added (Claude, then ChatGPT) go first.
     2) Free stack: Gemini 3.5 Flash first (large free allowance),
        then OpenRouter free models, then Groq 70b → 8b, then Perplexity.
     Explicit provider selection is STRICT — never silently swap Gemini → Gemma.
+    With images: only vision-capable doors (no silent strip on Groq/text-only OR).
     """
     requested = (provider or "auto").lower().strip()
     if requested in {"google"}:
@@ -241,6 +292,8 @@ def _fallback_chain(provider: str, model: str) -> list[tuple[str, str]]:
     if requested not in {"auto", ""}:
         # Other explicit connections also stay on that vendor only.
         if requested == "groq":
+            if has_images:
+                return []  # Groq path strips images — do not pretend vision worked.
             mdls = []
             if model and ("8b" in model.lower() or "instant" in model.lower()):
                 mdls = [settings.groq_fast_model, settings.groq_primary_model]
@@ -248,23 +301,29 @@ def _fallback_chain(provider: str, model: str) -> list[tuple[str, str]]:
                 mdls = [settings.groq_primary_model, settings.groq_fast_model]
             return [("groq", m) for m in mdls]
         if requested == "grok":
+            if has_images:
+                return []
             return [("grok", model if (model or "").startswith("grok") else settings.grok_model)]
         if requested == "anthropic":
             return [("anthropic", settings.anthropic_model)]
         if requested == "openai":
             return [("openai", settings.openai_primary_model)]
         if requested == "perplexity":
+            if has_images:
+                return []
             return [("perplexity", settings.perplexity_model)]
         if requested == "openrouter":
             chain_or: list[tuple[str, str]] = []
-            for mid in _openrouter_roster_models()[:10]:
+            for mid in _openrouter_roster_models(for_images=has_images)[:10]:
                 if not _model_on_cooldown("openrouter", mid):
                     chain_or.append(("openrouter", mid))
-            return chain_or or [("openrouter", settings.openrouter_free_model)]
+            return chain_or or [
+                ("openrouter", m)
+                for m in _openrouter_roster_models(for_images=has_images)[:3]
+            ]
         return [(requested, model or settings.gemini_model)]
 
     # --- auto only below ---
-    provider, model = "gemini", settings.gemini_model
     chain: list[tuple[str, str]] = []
 
     def add(prov: str, mdl: str) -> None:
@@ -286,21 +345,27 @@ def _fallback_chain(provider: str, model: str) -> list[tuple[str, str]]:
             add("gemini", settings.gemini_model)
         elif name == "openrouter":
             if openrouter_key():
-                for mid in _openrouter_roster_models()[:10]:
+                for mid in _openrouter_roster_models(for_images=has_images)[:10]:
                     add("openrouter", mid)
         elif name == "groq":
-            add("groq", settings.groq_primary_model)
-            add("groq", settings.groq_fast_model)
+            if not has_images:
+                add("groq", settings.groq_primary_model)
+                add("groq", settings.groq_fast_model)
         elif name == "grok":
-            add("grok", settings.grok_model)
+            if not has_images:
+                add("grok", settings.grok_model)
         elif name == "perplexity":
-            add("perplexity", settings.perplexity_model)
+            if not has_images:
+                add("perplexity", settings.perplexity_model)
 
     add("gemini", settings.gemini_model)
     if chain:
         return chain
     if openrouter_key():
-        return [("openrouter", settings.openrouter_free_model)]
+        for mid in _openrouter_roster_models(for_images=has_images)[:3]:
+            add("openrouter", mid)
+        if chain:
+            return chain
     return [("gemini", settings.gemini_model)]
 
 
@@ -343,7 +408,10 @@ def _mark_provider_error(name: str, err: str, *, model: str | None = None) -> No
 
     if name == "openrouter":
         if model:
-            _set_model_cooldown("openrouter", model, 120 if is_429 or is_503 else 60)
+            if "image input" in err_l or ("404" in err_l and "image" in err_l):
+                _set_model_cooldown("openrouter", model, 3600)
+            else:
+                _set_model_cooldown("openrouter", model, 120 if is_429 or is_503 else 60)
         # Keep provider active so other free models can be tried.
         try:
             data = json.loads(_ROUTING_PATH.read_text(encoding="utf-8"))
@@ -371,11 +439,26 @@ def _mark_provider_error(name: str, err: str, *, model: str | None = None) -> No
             return
         if is_429 or "quota" in err_l:
             try:
+                import re
+                from datetime import datetime, timezone
+
                 data = json.loads(_ROUTING_PATH.read_text(encoding="utf-8"))
-                prov = data.setdefault("providers", {}).setdefault("gemini", {})
-                prov["is_active"] = False
-                prov["error"] = err[:160]
+                provid = data.setdefault("providers", {}).setdefault("gemini", {})
+                provid["is_active"] = False
+                provid["error"] = err[:220]
+                # Prefer Google's "Please retry in Xs" (often ~30s RPM), not a blunt 30m grey.
+                wait_s = 45.0
+                m = re.search(r"retry in\s+([0-9]+(?:\.[0-9]+)?)\s*s", err_l)
+                if m:
+                    wait_s = min(900.0, max(15.0, float(m.group(1)) + 5.0))
+                elif "free_tier_requests" in err_l or "free tier" in err_l:
+                    wait_s = 120.0
+                until = datetime.now(timezone.utc).timestamp() + wait_s
+                provid["blocked_until"] = datetime.fromtimestamp(until, tz=timezone.utc).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                )
                 _ROUTING_PATH.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+                _set_model_cooldown("gemini", settings.gemini_model, wait_s)
             except Exception:
                 pass
             bust_preflight_cache()
@@ -401,16 +484,32 @@ def _provider_usable(name: str) -> bool:
     if name == "openrouter":
         return True
     if name == "gemini":
-        # Allow gemini attempt even if last ping said inactive, unless quota error.
+        # Time-bounded quota block only — free tier must become usable again.
         try:
+            from tokenish_engine.dispatch.argus import _gemini_quota_block_active
+
             data = json.loads(_ROUTING_PATH.read_text(encoding="utf-8"))
-            err = str(data.get("providers", {}).get("gemini", {}).get("error") or "").lower()
-            if "quota" in err and "429" in err:
+            slot = data.get("providers", {}).get("gemini", {})
+            if _gemini_quota_block_active(slot) is True:
                 return False
         except Exception:
             pass
         return True
     return _provider_active(name)
+
+
+def _clear_gemini_quota_mark() -> None:
+    """After a successful Gemini call, drop sticky grey-out state."""
+    try:
+        data = json.loads(_ROUTING_PATH.read_text(encoding="utf-8"))
+        prov = data.setdefault("providers", {}).setdefault("gemini", {})
+        prov["is_active"] = True
+        prov["error"] = None
+        prov["blocked_until"] = None
+        _ROUTING_PATH.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        bust_preflight_cache()
+    except Exception:
+        pass
 
 
 def _completion_body(model: str, messages: list, *, provider: str, stream: bool) -> dict[str, Any]:
@@ -476,8 +575,17 @@ async def chat_complete(
     images: list[dict[str, str]] | None = None,
 ) -> str:
     history = history or []
+    has_images = bool(_normalize_images(image_b64, image_mime, images))
+    chain = _fallback_chain(provider, model, has_images=has_images)
+    if not chain:
+        if has_images:
+            raise RuntimeError(
+                "no vision-capable connection for these photos — "
+                "use gemini or chatgpt, or wait for free OpenRouter vision models"
+            )
+        raise RuntimeError("no providers available")
     errors: list[str] = []
-    for prov, mdl in _fallback_chain(provider, model):
+    for prov, mdl in chain:
         try:
             return await _dispatch_once(
                 provider=prov,
@@ -524,9 +632,18 @@ async def chat_stream(
 ) -> AsyncIterator[str]:
     history = history or []
     requested = (provider, model)
-    chain = _fallback_chain(provider, model)
+    has_images = bool(_normalize_images(image_b64, image_mime, images))
+    chain = _fallback_chain(provider, model, has_images=has_images)
     last_err = ""
     errors: list[str] = []
+    if not chain:
+        if has_images:
+            raise RuntimeError(
+                "no vision-capable connection for these photos — "
+                "use gemini or chatgpt, or wait for free OpenRouter vision models "
+                "(many free models are text-only)"
+            )
+        raise RuntimeError("no providers available")
     if chain and chain[0] != requested:
         last_err = _provider_skip_reason(requested[0])
     for prov, mdl in chain:
@@ -585,6 +702,24 @@ async def chat_stream(
                 session.fallback_reason = last_err
             continue
     detail = " | ".join(errors[:5]) if errors else last_err
+    if has_images and errors and all(
+        ("429" in e.lower() or "rate" in e.lower() or "image input" in e.lower()) for e in errors
+    ):
+        raise RuntimeError(
+            "free vision models are busy or unavailable for these photos — "
+            "switch connection to gemini or chatgpt, or retry later"
+            + (f" — {detail}" if detail else "")
+        )
+    if errors and any(
+        ("data policy" in e.lower() or "guardrail" in e.lower() or "privacy" in e.lower())
+        for e in errors
+    ):
+        raise RuntimeError(
+            "OpenRouter privacy/data-policy settings are blocking free models — "
+            "at openrouter.ai/settings/privacy enable free endpoints / model training "
+            "(and clear ignored providers), or switch connection to gemini"
+            + (f" — {detail}" if detail else "")
+        )
     raise RuntimeError("all providers failed during stream" + (f" — {detail}" if detail else ""))
 
 
@@ -873,6 +1008,8 @@ async def _gemini_chat(
             raise RuntimeError(last_err)
     if r is None or r.status_code >= 400:
         raise RuntimeError(last_err or "gemini call failed")
+
+    _clear_gemini_quota_mark()
 
     data = r.json()
     cand = (data.get("candidates") or [{}])[0]

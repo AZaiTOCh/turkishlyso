@@ -2,7 +2,7 @@
 
 Open-source **token use optimizer**: a local daemon + chat UI. Every prompt and attachment runs through a **split-execution / tokopt** pipeline, then dispatches to the model you select.
 
-**evry drp cnts** · current package **v0.4.1**
+**evry drp cnts** · current package **v0.4.2**
 
 ## install (pip)
 
