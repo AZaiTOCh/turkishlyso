@@ -1,8 +1,26 @@
 # tokenish
 
-Open-source **token use optimizer**: a local daemon + chat UI. Every prompt and attachment runs through a **split-execution / tokopt** pipeline, then dispatches to the model you select.
+**Version:** 0.4.3 · **Runtime:** local FastAPI daemon + chat UI · **GitHub:** [`tknsh/tokenish`](https://github.com/tknsh/tokenish)
 
-**evry drp cnts** · current package **v0.4.2**
+Open-source **token use optimizer**. Every prompt and attachment runs through a **split-execution / tokopt (OptComp)** pipeline, then dispatches to the model you select.
+
+**evry drp cnts**
+
+---
+
+## Stack
+
+| Layer | Technology |
+|-------|------------|
+| **Runtime** | Local daemon (`127.0.0.1:8741`) + static chat UI |
+| **Language** | Python 3.10+ |
+| **OptComp** | Tokopt cylinders — see [Cylinder Register](docs/cylinders/CYLINDER_REGISTER.md) |
+| **Agentics** | Argus, Mumblz, Rainman, Agatha, Mrs. Brown, Neoborg, Gretta — [Agent Registry](docs/agents/AGENT_REGISTRY.md) |
+| **Providers** | Gemini 3.5 Flash, OpenRouter, OpenAI, Anthropic, Groq, Grok, Perplexity (user keys) |
+| **Hive** | Live World Counter — engine-local + optional Cloudflare Worker (`packages/tokex-clock/`) |
+| **Version control** | GitHub — [`tknsh/tokenish`](https://github.com/tknsh/tokenish) |
+
+---
 
 ## install (pip)
 
@@ -29,46 +47,146 @@ pip install -e ".[dev]"
 tokenish
 ```
 
+---
+
 ## golden rule
 
 - optimize **packaging** (how the send is bound), not silent omission
 - compress **instructions**; never character-abbreviate free text (vowel shorthand is rejected)
 - never silently rewrite **document meaning** — full-doc loyalty by default; ITS chunk-skip only with explicit consent
 - never claim vision savings without billing vision tokens on both before & after
+- ffmpeg / media sampling is **consent-gated** (default OFF), same loyalty posture as ITS
+
+---
+
+## Pipeline (v0.4.3)
+
+```
+attachments → ingest (+ optional ffmpeg keyframes)
+prompt + doc → Hi0 / dedupe / format_csv / headroom / ITS (conditional)
+            → LCS + envelope candidates → tokenizer gate (≥2 fallbacks)
+            → TOKEX meter
+            → Rainman → Agatha → Mrs. Brown → Neoborg (optional hive)
+            → Argus-aware provider dispatch
+```
+
+**Agents:** [Argus](docs/agents/ARGUS.md) · [Mumblz](docs/agents/MUMBLZ.md) · [Rainman](docs/agents/RAINMAN.md) · [Agatha](docs/agents/AGATHA.md) · [Mrs. Brown](docs/agents/MRS_BROWN.md) · [Neoborg](docs/agents/NEOBORG.md) · [Gretta](docs/agents/GRETTA.md) · [tokex_clock](docs/agents/TOKEX_CLOCK.md)
+
+Canonical directories: [Agent Registry](docs/agents/AGENT_REGISTRY.md) · [Cylinder Register](docs/cylinders/CYLINDER_REGISTER.md)
+
+---
 
 ## what’s in v0.4 (highlights)
 
 ### Live World Counter (Neoborg hive)
 
-- **Third TOKEX panel** (global): upright butterfly GIF, large hive `saved %` (2 decimals), local **H:M:S + timezone**, and **connected users online**.
-- Flow: Rainman → Agatha → **Mrs. Brown** (validate numbers) → **Neoborg** (cross-vet + ledger) → optional hive broadcast.
-- Discrete modules:
-  - `tokenish_engine/agents/tokex_clock.py` — Live World Counter client (opt-in, sync, fetch)
-  - `tokenish_engine/hive_store.py` — engine-local hive (absolute per-node lifetime TOKEX + presence)
-  - `packages/tokex-clock/` — Cloudflare Worker scaffold for **true multi-user** worldwide tally
-- Endpoints: `GET /tokex-clock`, `POST /tokex-clock/sync`, `POST /tokex-clock/opt-in`, `POST /hive/contribute`
-- Sole-user parity: UI syncs **lifetime** totals into the hive so global % matches lifetime until more nodes join.
-- Opt-in via the global panel **⋮**. Set `TOKENISH_HIVE_URL` (or paste Worker URL in the popup) for worldwide sharing; blank URL = this engine’s local hive.
-
-### Agents
-
-| Agent | Role |
-|-------|------|
-| **Argus** | Provider health / failover + linked-API inventory on preflight |
-| **Mumblz** | History titles (2 lowercase words) |
-| **Rainman** | Factual tokopt-cylinder interrogation (no LLM) |
-| **Agatha** | SQLite archive (`~/.tokenish/agatha.db`) |
-| **Mrs. Brown** | Matriarch hive intake — numeric TOKEX only |
-| **Neoborg** | Cross-vet + local ledger + Live World Counter broadcast |
-| **Gretta** | Onboarding + curated LLM protoprompter / qualifier / router |
+- **Third TOKEX panel** (global): upright butterfly GIF, large hive `saved %`, local **H:M:S + timezone**, **users online**
+- Flow: Rainman → Agatha → **Mrs. Brown** → **Neoborg** → optional hive broadcast
+- Set `TOKENISH_HIVE_URL` for worldwide Worker; blank = engine-local hive
 
 ### Product UX
 
-- Connect-an-API popup: optional slots, **already linked** greying, Perplexity paid badge, **Grok (xAI)** slot
-- Dual **lifetime** / **this chat** TOKEX panels + global hive panel
-- Fidelity defaults: ITS off, pxpipe off, vision billed both sides
+- Connect-an-API popup; dual lifetime / this-chat TOKEX + global hive panel
+- Fidelity defaults: ITS off, pxpipe off, ffmpeg off; vision billed both sides
+- Gretta onboarding / curated router among linked APIs
 
-Full chronological detail: `packages/engine/VERSION_LOG.md`.
+### ffmpeg (v0.4.3)
+
+- Optional media cylinder — see [FFMPEG](docs/cylinders/FFMPEG.md)
+- Install a build from [ffmpeg.org/download](https://www.ffmpeg.org/download.html); set `TOKENISH_FFMPEG` or PATH
+- Form flag: `enable_ffmpeg=true` on `/chat` / `/compile`
+
+Full chronology: [`packages/engine/VERSION_LOG.md`](packages/engine/VERSION_LOG.md).
+
+---
+
+## Version evolution
+
+Listed **newest → oldest**. Changes use **`1)`, `2)`, `3)`** format. Detail + DoP: [`VERSION_LOG.md`](packages/engine/VERSION_LOG.md).
+
+### v0.4.3 — Peer-review upgrades + ffmpeg
+**Commit date:** 2026-07-21
+
+**1) ffmpeg media cylinder** ([FFMPEG](docs/cylinders/FFMPEG.md)) — consent OFF by default  
+**2) Rainman sequential deltas** ([Rainman](docs/agents/RAINMAN.md))  
+**3) Envelope gate fallback (≥2 candidates)** ([split-exec](docs/cylinders/SPLIT_EXEC.md))  
+**4) Micro tokenizer gates** on Hi0 / format_csv  
+**5) Agent + cylinder docs** under `docs/`  
+**6) Alcubierre rejected · Latents parked · Memtrove still out of path  
+
+### v0.4.2 — Vision routing + Gemini quota recovery
+**Commit date:** 2026-07-15
+
+**1) OpenRouter vision routing**  
+**2) Gemini time-bounded grey-out** ([Argus](docs/agents/ARGUS.md))  
+**3) Auto+images must not strip to text-only doors  
+
+### v0.4.1 — Gretta + provider health UX
+**Commit date:** 2026-07-15
+
+**1) Gretta** ([Gretta](docs/agents/GRETTA.md))  
+**2) Soft grey-out reasons**  
+**3) History dropdown · passthrough parity  
+
+### v0.4.0 — Live World Counter + brand
+**Commit date:** 2026-07-14
+
+**1) Live World Counter** ([Neoborg](docs/agents/NEOBORG.md) · [tokex_clock](docs/agents/TOKEX_CLOCK.md))  
+**2) Brand polish · Grok slot  
+
+### v0.3.1 — Hive Clock
+**Commit date:** 2026-07-14
+
+**1) Hive store + Worker scaffold · three TOKEX panels**
+
+### v0.3.0 — Fidelity + hive agents
+**Commit date:** 2026-07-14
+
+**1) ITS/pxpipe OFF by default**  
+**2) Rainman · Agatha · Mrs. Brown · Neoborg**  
+**3) Connect-an-AI popup  
+
+### v0.2 — UI + cylinder concert
+**Commit date:** 2026-07-13
+
+**1) Lifetime/this-chat TOKEX · Mumblz · expanded cylinders · multi-image fix**
+
+### v0.1 — Engine boots
+**Commit date:** 2026-07-13
+
+**1) FastAPI + UI · ingest→LCS→TOKEX→dispatch · Argus beginnings**
+
+### v0.0 — First spark
+**Commit date:** 2026-07-13
+
+**1) Local token optimizer idea · TOKEX / Tokopt / Split-Execution**
+
+---
+
+## Future roadmap (WHEN)
+
+| # | Plan | WHEN | Explicitly not yet |
+|---|------|------|--------------------|
+| F1 | Sealed-run benchmark corpus + published bands | Agatha corpus has multi-workload sealed runs | Invented headline SAVED_PCT |
+| F2 | Causal ablation harness beyond sequential deltas | F1 green | UI that implies equal-share is causal |
+| F3 | Memtrove retrieve-before-send + RETRIEVE_TOKEX | Enterprise/privacy story + consent UX | Folding retrieve into SAVED_TOKEX |
+| F4 | Full Clop-class still encoders (pngquant/gifsicle/…) | ffmpeg path stable on Windows/macOS/Linux | Depending on Clop.app |
+| F5 | Latent index (VAE/CLIP+PQ) for retrieve | Memtrove/local index design approved | Sending float latents as chat vision payload |
+| F6 | Auditor-grade Live World Counter | Immutable ledgers + anti-double-count policy | Datacenter-deferral marketing claims |
+
+---
+
+## Documentation
+
+| Doc | Path |
+|-----|------|
+| [Agent Registry](docs/agents/AGENT_REGISTRY.md) | Canonical agent profiles |
+| [Cylinder Register](docs/cylinders/CYLINDER_REGISTER.md) | OptComp cylinder profiles |
+| [VERSION_LOG](packages/engine/VERSION_LOG.md) | Full version evolution + DoP |
+| [Engine README](packages/engine/README.md) | FastAPI endpoints |
+| [Download / Windows exe](docs/download.md) | Packaging notes |
+
+---
 
 ## windows exe
 
@@ -79,9 +197,9 @@ cd packages/engine
 .\packaging\build_windows.ps1
 ```
 
-## optional env / keys
+---
 
-Keys can be pasted in the first-run UI (saved under `~/.tokenish/config.json`) or set as env vars:
+## optional env / keys
 
 | variable | provider |
 |----------|----------|
@@ -92,8 +210,11 @@ Keys can be pasted in the first-run UI (saved under `~/.tokenish/config.json`) o
 | `GROQ_API_KEY` | Groq |
 | `XAI_API_KEY` / `GROK_API_KEY` | Grok (xAI) |
 | `PERPLEXITY_API_KEY` | Perplexity |
-| `TOKENISH_HIVE_URL` | Live World Counter remote hive (Cloudflare Worker) |
+| `TOKENISH_HIVE_URL` | Live World Counter remote hive |
+| `TOKENISH_FFMPEG` | path to `ffmpeg` / `ffmpeg.exe` |
 | `MEMTROVE_API_KEY` | optional Memtrove cloud SDK |
+
+---
 
 ## deploy worldwide Live World Counter
 
@@ -102,7 +223,9 @@ cd packages/tokex-clock
 npx wrangler deploy
 ```
 
-Then set `TOKENISH_HIVE_URL` to the Worker URL (or paste it in the Connect popup). See `packages/tokex-clock/README.md`.
+Then set `TOKENISH_HIVE_URL` to the Worker URL. See `packages/tokex-clock/README.md`.
+
+---
 
 ## license
 

@@ -51,6 +51,12 @@ class Settings(BaseSettings):
     enable_headroom: bool = True  # soft packaging; still verbatim-gated later
     enable_its: bool = False  # chunk drop requires explicit consent
     enable_faiss_mib: bool = True
+    # Lossy media sampling (GIF/video → keyframes). Consent-gated like ITS.
+    enable_ffmpeg: bool = False
+    ffmpeg_path: str | None = None  # or env TOKENISH_FFMPEG
+    ffmpeg_target_fps: float = 1.0
+    ffmpeg_max_frames: int = 8
+    ffmpeg_max_width: int = 1024
     kiosk_mode: bool = False
     pxpipe_image_tokens: int = 4761
     pxpipe_min_text_tokens: int = 4000

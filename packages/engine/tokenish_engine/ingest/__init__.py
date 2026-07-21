@@ -191,6 +191,8 @@ def ingest_file(
     data: bytes,
     prompt: str = "",
     page_range: str | None = None,
+    *,
+    enable_ffmpeg: bool | None = None,
 ) -> IngestResult:
     ext = _ext(filename)
     if ext == "pdf":
@@ -205,7 +207,49 @@ def ingest_file(
             data_type="doc_legacy",
             metadata={"warning": "legacy .doc best-effort decode; prefer .docx"},
         )
-    if ext in {"png", "jpg", "jpeg", "webp", "gif", "bmp"}:
+    # Temporal media: optional ffmpeg keyframe sample (consent-gated), else still path.
+    if ext in {
+        "gif",
+        "mp4",
+        "mov",
+        "webm",
+        "mkv",
+        "m4v",
+        "avi",
+        "mpeg",
+        "mpg",
+    }:
+        from tokenish_engine.media.ffmpeg_cylinder import sample_media_frames
+
+        sampled = sample_media_frames(filename, data, enabled=enable_ffmpeg)
+        if sampled.get("applied") and sampled.get("images"):
+            images = list(sampled["images"])
+            meta = {
+                "mode": "ffmpeg_keyframes",
+                **(sampled.get("meta") or {}),
+            }
+            if sampled.get("stage"):
+                meta["ffmpeg_stage"] = sampled["stage"]
+            return IngestResult(
+                raw_text=(
+                    f"[MEDIA INPUT: {len(images)} keyframe(s) sampled via ffmpeg "
+                    f"from {ext}; annotate/transcribe from frames]"
+                ),
+                data_type="ffmpeg_media_frames",
+                image_b64=images[0]["b64"],
+                image_mime=images[0].get("mime") or "image/jpeg",
+                images=images,
+                metadata=meta,
+            )
+        # Fall through to Pillow still (first frame) when disabled/unavailable.
+        still = optimize_image(data, prompt)
+        meta = dict(still.metadata or {})
+        if sampled.get("stage"):
+            meta["ffmpeg_stage"] = sampled["stage"]
+        if sampled.get("warning"):
+            meta["warning"] = sampled["warning"]
+        return still.model_copy(update={"metadata": meta, "data_type": still.data_type or "optimized_image_pixels"})
+    if ext in {"png", "jpg", "jpeg", "webp", "bmp"}:
         return optimize_image(data, prompt)
     if ext in {
         "txt", "md", "csv", "json", "tsv", "log", "py", "ts", "js", "toml", "yaml", "yml",

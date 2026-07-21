@@ -354,15 +354,21 @@ async def compile_endpoint(
     target_engine: str = Form("gpt-4o"),
     model: str | None = Form(None),
     page_range: str | None = Form(None),
+    enable_its: str | None = Form("false"),
+    enable_ffmpeg: str | None = Form("false"),
     files: list[UploadFile] | None = File(None),
 ) -> JSONResponse:
     uploads = await _read_uploads(files)
+    its_flag = str(enable_its or "").strip().lower() in {"1", "true", "yes", "on"}
+    ffmpeg_flag = str(enable_ffmpeg or "").strip().lower() in {"1", "true", "yes", "on"}
     result = optimize(
         prompt=prompt,
         target_engine=target_engine,
         model=model,
         files=uploads,
         page_range=page_range,
+        enable_its=its_flag,
+        enable_ffmpeg=ffmpeg_flag,
     )
     return JSONResponse(result.model_dump())
 
@@ -377,11 +383,13 @@ async def chat_endpoint(
     page_range: str | None = Form(None),
     stream: bool = Form(False),
     enable_its: str | None = Form("false"),
+    enable_ffmpeg: str | None = Form("false"),
     files: list[UploadFile] | None = File(None),
 ):
     apply_saved_keys_to_environ()
     uploads = await _read_uploads(files)
     its_flag = str(enable_its or "").strip().lower() in {"1", "true", "yes", "on"}
+    ffmpeg_flag = str(enable_ffmpeg or "").strip().lower() in {"1", "true", "yes", "on"}
     compiled = optimize(
         prompt=prompt,
         target_engine=target_engine,
@@ -389,6 +397,7 @@ async def chat_endpoint(
         files=uploads,
         page_range=page_range,
         enable_its=its_flag,
+        enable_ffmpeg=ffmpeg_flag,
     )
     hist = compress_history(_parse_history(history))
     prov = resolve_provider(provider, model, target_engine)

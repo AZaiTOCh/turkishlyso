@@ -7,6 +7,8 @@ from tokenish_engine.compile.lcs import (
     instruction_follow_envelope,
     naive_baseline_prompt,
     pick_cheapest_envelope,
+    pick_gated_envelope,
+    rank_envelopes,
     wants_full_document_context,
     wants_instruction_following,
 )
@@ -21,6 +23,8 @@ __all__ = [
     "maybe_tabular_cheaper",
     "naive_baseline_prompt",
     "pick_cheapest_envelope",
+    "pick_gated_envelope",
+    "rank_envelopes",
     "apply_if_cheaper",
     "reject_char_shorthand",
     "wants_full_document_context",

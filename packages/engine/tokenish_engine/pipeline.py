@@ -11,7 +11,7 @@ from tokenish_engine.compile import (
     document_verbatim_in_envelope,
     instruction_follow_envelope,
     naive_baseline_prompt,
-    pick_cheapest_envelope,
+    pick_gated_envelope,
     wants_full_document_context,
     wants_instruction_following,
 )
@@ -26,6 +26,25 @@ from tokenish_engine.meters.tokens import count_tokens
 from tokenish_engine.models import CompileResult, TokexReport
 from tokenish_engine.retrieve import gate_document
 from tokenish_engine.vision import maybe_pack
+
+
+def _note_delta(
+    deltas: list[dict],
+    *,
+    cylinder: str,
+    before: str,
+    after: str,
+) -> None:
+    b = count_tokens(before or "")
+    a = count_tokens(after or "")
+    deltas.append(
+        {
+            "cylinder": cylinder,
+            "tokens_before": b,
+            "tokens_after": a,
+            "delta_saved": max(0, b - a),
+        }
+    )
 
 
 def _agent_seal(
@@ -43,6 +62,7 @@ def _agent_seal(
     kiosk_blocked: bool,
     attachment_warning: str | None,
     fidelity_mode: str,
+    stage_deltas: list[dict] | None = None,
 ) -> CompileResult:
     rainman = interrogate_run(
         stages=stages,
@@ -50,6 +70,7 @@ def _agent_seal(
         its_meta=its_meta,
         attachment_warning=attachment_warning,
         fidelity_mode=fidelity_mode,
+        stage_deltas=stage_deltas,
     )
     agatha = archive_rainman_brief(rainman)
     brown = intake_local_savings(
@@ -92,19 +113,30 @@ def optimize(
     enable_pxpipe: bool | None = None,
     enable_headroom: bool | None = None,
     enable_its: bool | None = None,
+    enable_ffmpeg: bool | None = None,
     kiosk_mode: bool | None = None,
 ) -> CompileResult:
     stages: list[str] = ["ingest", "lcs"]
+    stage_deltas: list[dict] = []
     use_pxpipe = settings.enable_pxpipe if enable_pxpipe is None else enable_pxpipe
     use_headroom = settings.enable_headroom if enable_headroom is None else enable_headroom
     use_its = settings.enable_its if enable_its is None else enable_its
+    use_ffmpeg = settings.enable_ffmpeg if enable_ffmpeg is None else enable_ffmpeg
     use_kiosk = settings.kiosk_mode if kiosk_mode is None else kiosk_mode
     its_meta: dict = {}
     kiosk_blocked = False
 
     parts: list[IngestResult] = []
     for name, data in files or []:
-        parts.append(ingest_file(name, data, prompt=prompt, page_range=page_range))
+        parts.append(
+            ingest_file(
+                name,
+                data,
+                prompt=prompt,
+                page_range=page_range,
+                enable_ffmpeg=use_ffmpeg,
+            )
+        )
     ingested = merge_ingests(parts) if parts else IngestResult()
 
     raw_doc = ingested.raw_text or ""
@@ -117,38 +149,70 @@ def optimize(
     original_doc = ingested.raw_text or ""
     attachment_warning = (ingested.metadata or {}).get("warning")
 
+    ffmpeg_stage = (ingested.metadata or {}).get("ffmpeg_stage")
+    if ffmpeg_stage:
+        stages.append(str(ffmpeg_stage))
+    if (ingested.metadata or {}).get("mode") == "ffmpeg_keyframes":
+        # Approximate vision-tile pressure reduced vs dumping many raw frames.
+        frames = len(images)
+        stage_deltas.append(
+            {
+                "cylinder": "ffmpeg",
+                "tokens_before": max(frames, 1) * int(settings.vision_tokens_per_image) * 2,
+                "tokens_after": frames * int(settings.vision_tokens_per_image),
+                "delta_saved": frames * int(settings.vision_tokens_per_image),
+                "note": "estimated vs denser frame dump; not a full A/B probe",
+            }
+        )
+
     stripped = raw_doc.strip()
     if raw_doc and (data_type == "json" or stripped.startswith("{") or stripped.startswith("[")):
+        before = raw_doc
         packed, applied = maybe_hi0_json_block(raw_doc)
+        # Micro tokenizer gate (peer P1): keep only if cheaper.
+        packed = apply_if_cheaper(before, packed) if applied else before
+        applied = packed != before
         if applied:
             raw_doc = packed
             stages.append("hi0")
+            _note_delta(stage_deltas, cylinder="hi0", before=before, after=raw_doc)
 
     has_attachment = bool(raw_doc.strip() or images)
     follow_mode = wants_instruction_following(prompt, has_attachment and bool(raw_doc.strip()))
 
     # Lossless duplicate-section removal (PAGE BREAK repeats, pasted clones).
+    # Peer note: run dedupe early on clean extract (already post-ingest).
     if raw_doc:
+        before = raw_doc
         deduped, dropped_n, dedupe_stage = dedupe_document_sections(raw_doc)
         if dropped_n > 0:
             raw_doc = deduped
             stages.append(dedupe_stage)
+            _note_delta(stage_deltas, cylinder="dedupe", before=before, after=raw_doc)
 
     if raw_doc and not follow_mode and (data_type == "json" or stripped.startswith("[")):
+        before = raw_doc
         rewritten, fmt_applied = maybe_tabular_cheaper(raw_doc)
+        rewritten = apply_if_cheaper(before, rewritten) if fmt_applied else before
+        fmt_applied = rewritten != before
         if fmt_applied:
             raw_doc = rewritten
             data_type = "csv"
             stages.append("format_csv")
+            _note_delta(stage_deltas, cylinder="format_csv", before=before, after=raw_doc)
 
     # Headroom for assess/analyze paths (and large text even if borderline follow).
     if use_headroom and not follow_mode and data_type in {"log", "txt", "csv", "pdf", "text", "md"} and len(raw_doc) > 2000:
+        before = raw_doc
         compressed, applied, stage = compress_context(raw_doc)
+        # compress_context already token-gates; record delta if applied.
         if applied:
             raw_doc = compressed
             stages.append(stage)
+            _note_delta(stage_deltas, cylinder="headroom", before=before, after=raw_doc)
 
     if use_its and raw_doc and not follow_mode and not wants_full_document_context(prompt):
+        before = raw_doc
         gated = gate_document(
             prompt,
             raw_doc,
@@ -166,9 +230,11 @@ def optimize(
             kiosk_blocked = True
             raw_doc = ""
             stages.append("its_kiosk_block")
+            _note_delta(stage_deltas, cylinder="its", before=before, after=raw_doc)
         elif gated.dropped > 0 and gated.text != raw_doc:
             raw_doc = gated.text
             stages.append(f"its_drop_{gated.dropped}")
+            _note_delta(stage_deltas, cylinder="its", before=before, after=raw_doc)
             if any(isinstance(d, dict) and d.get("faiss_prefilter") for d in (gated.details or [])):
                 stages.append("faiss_mib")
     elif use_its and wants_full_document_context(prompt) and raw_doc and not follow_mode:
@@ -177,6 +243,8 @@ def optimize(
         stages.append("its_disabled_consent")
 
     fidelity_mode = "loyalty" if not use_its else "savings_consent"
+    if use_ffmpeg:
+        fidelity_mode = "savings_consent" if fidelity_mode == "loyalty" else fidelity_mode
 
     px_applied = False
     px_surcharge = 0
@@ -194,8 +262,10 @@ def optimize(
         "log",
         "pdf",
         "excel_matrix",
+        "ffmpeg_media_frames",
     }
     if use_pxpipe and raw_doc and not images and not kiosk_blocked and not skip_px:
+        before = raw_doc
         pointer, pb64, pmime, px_applied = maybe_pack(
             raw_doc,
             model=model,
@@ -208,6 +278,7 @@ def optimize(
             images = [{"b64": pb64, "mime": pmime}]
             px_surcharge = settings.pxpipe_image_tokens
             stages.append("pxpipe")
+            _note_delta(stage_deltas, cylinder="pxpipe", before=before, after=pointer or "")
 
     nodes = compress_instructions(prompt, follow_attachment=follow_mode)
 
@@ -238,7 +309,14 @@ def optimize(
             kiosk_blocked=kiosk_blocked,
             attachment_warning=attachment_warning,
             fidelity_mode=fidelity_mode,
+            stage_deltas=stage_deltas,
         )
+
+    baseline = (
+        naive_baseline_prompt(prompt, original_doc)
+        if original_doc
+        else baseline_prompt(prompt, original_doc)
+    )
 
     if kiosk_blocked:
         envelope = (
@@ -248,6 +326,7 @@ def optimize(
             "Kiosk Mode: ITS skill scores fell below threshold. "
             "No low-relevance context was injected."
         )
+        stages.append("split_exec")
     elif raw_doc or images:
         candidates: list[tuple[str, str]] = []
         clean = nodes.get("clean_prompt") or prompt.strip()
@@ -295,17 +374,23 @@ def optimize(
                 )
             )
 
-        stage_pick, envelope = pick_cheapest_envelope(candidates)
+        # Peer P0: keep ≥2 ranked candidates into tokenizer gate with fallback.
+        stage_pick, envelope, gate_extras = pick_gated_envelope(
+            candidates,
+            baseline=baseline,
+            min_fallbacks=2,
+        )
         stages.append(stage_pick)
+        stages.extend(gate_extras)
+        _note_delta(
+            stage_deltas,
+            cylinder="lcs",
+            before=baseline,
+            after=envelope,
+        )
     else:
         envelope = nodes.get("clean_prompt") or prompt.strip()
         stages.append("prompt_only")
-
-    baseline = (
-        naive_baseline_prompt(prompt, original_doc)
-        if original_doc
-        else baseline_prompt(prompt, original_doc)
-    )
 
     if reject_char_shorthand(envelope):
         envelope = baseline
@@ -353,6 +438,7 @@ def optimize(
             + vision_note,
             "SAVED_TOKEX = max(0, TOTAL_TOKEX - TOKEX_THIS_RUN)",
             "vision billed equally on before/after unless packing truly shrinks text",
+            "Rainman attribution prefers sequential stage_deltas when present",
             *([attachment_warning] if attachment_warning else []),
         ],
     )
@@ -371,4 +457,5 @@ def optimize(
         kiosk_blocked=kiosk_blocked,
         attachment_warning=attachment_warning,
         fidelity_mode=fidelity_mode,
+        stage_deltas=stage_deltas,
     )

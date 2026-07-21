@@ -1,210 +1,176 @@
 # tokenish VERSION LOG
 
-Factual release ledger. Updated when a version is committed.
-**Measured** = real TOKEX/Agatha numbers. **Unknown** = not invented.
-**DoP** = Duration of Process (approx. wall-clock window for that version’s work, US Eastern).
+Factual release ledger. **Measured** = real TOKEX/Agatha numbers. **Unknown** = not invented.  
+**DoP** = Duration of Process (approx. wall-clock window, US Eastern).
 
-Versions are newest → oldest.
+## Version evolution
 
----
+Listed **newest → oldest**. Changes inside each version use the concise **`1)`, `2)`, `3)`** format for instant review. Commit dates are first release commits on `main` (or DoP day when pre-tag).
 
-## v0.4.2 — Vision routing + Gemini quota recovery
-
-- **DoP:** Jul 15, 2026 · ~9:55 PM – ~10:40 PM EST
-- Package version **0.4.2**.
-
-### Briefs
-- **OpenRouter + photos:** vision chain prefers VL/Gemma; skips text-only free IDs that 404 on image input; clearer privacy/data-policy and “busy vision” errors.
-- **Gemini grey-out:** quota blocks are time-bounded (honor Google “retry in Xs”); sticky forever-grey fixed; successful calls clear the mark; free-tier request-limit hint.
-- **Auto + images:** do not silently strip vision onto Groq/text-only doors.
+**Agents:** [Agent Registry](../../docs/agents/AGENT_REGISTRY.md) · **Cylinders:** [Cylinder Register](../../docs/cylinders/CYLINDER_REGISTER.md)
 
 ---
 
-## v0.4.1 — Gretta router + provider health UX
+### v0.4.3 — Peer-review upgrades + ffmpeg cylinder (pending first commit on new remote)
+**Commit date:** 2026-07-21
 
-- **DoP:** Jul 14–15, 2026 · overnight through ~10:05 AM EST
-- Package version **0.4.1**.
+Implements peer-pack P0/P1: sequential Rainman deltas, dual envelope gate fallback, consent-gated ffmpeg media cylinder (Clop-inspired), micro tokenizer gates, benchmark scaffold. Proposal decisions: Alcubierre rejected; Latents parked; Memtrove still out of optimize path.
 
-### Agents / agentics
-| Agent | Role / skills (this release) |
-|---|---|
-| **Gretta** | Splash + API onboarding host; **protoprompter / qualifier / router** — matches what you want to a **curated** capability map, then only among **linked** APIs. Not a live “best LLM” scraper. Sidebar ask + recommend path shipped; **chatbox follow-ups parked** (see reminder below). |
-| **Argus** | Provider health; soft grey-out reasons (quota / missing key / no credits); Gemini quota stays marked until recoverable. |
-| **Agatha** | Archive to `~/.tokenish/output/runs/*.md` + lifetime scoreboard JSON (SQLite write off for new path). |
-| **Rainman** | Equal attributed shares of measured run savings among fired cylinders. |
-| **Neoborg** | Display rename + Live World Counter (as in v0.4). |
+**1) ffmpeg media cylinder** ([FFMPEG](../../docs/cylinders/FFMPEG.md) · `tokenish_engine/media/ffmpeg_cylinder.py`)  
+- Consent-gated (`enable_ffmpeg`, default OFF)  
+- GIF/video → keyframe JPEGs via local ffmpeg binary  
+- Fallback to Pillow still + stage note if binary missing  
+- Resolve via `TOKENISH_FFMPEG` / PATH; Windows builds from [ffmpeg.org/download](https://www.ffmpeg.org/download.html)
 
-### Product
-- Brand wordmark polish; history **dropdown** so chat list cannot cover Gretta.
-- Connection / current-model soft grey + blurbs; Gemini lock to `gemini-3.5-flash` with Search-aware parity path.
-- Passthrough parity for bare chat; explicit provider lock (no silent Gemma swap).
+**2) Rainman sequential deltas** ([Rainman](../../docs/agents/RAINMAN.md))  
+- Prefers measured before→after stage deltas when present  
+- Residual equal-shared; equal-share remains caveated fallback
 
-### Future reminder — Gretta chatbox (parked)
-| Phase | Scope | Effort |
-|---|---|---|
-| **Light** | Short follow-ups (“are you sure?”, “what about ChatGPT?”) + last-pick memory + Enter-to-send | ~0.5–1 day |
-| **Medium** | Multi-turn Gretta sidebar chat (LLM for talk; rules still route models) | ~2–4 days |
-| **Heavy** | Full agent: multi-LLM bake-offs, tools, long memory | 1–2+ weeks |
+**3) Envelope gate fallback** ([split-exec](../../docs/cylinders/SPLIT_EXEC.md))  
+- `pick_gated_envelope` tries ≥2 ranked candidates against tokenizer gate
 
-Light agreed as next chat layer when cylinder finetuning cools down — **not started in v0.4.1**.
+**4) Micro tokenizer gates** ([Hi0](../../docs/cylinders/HI0.md) · [format_csv](../../docs/cylinders/FORMAT_CSV.md) · [headroom](../../docs/cylinders/HEADROOM.md))  
+- Keep transform only if cheaper
 
----
+**5) Docs schema alignment**  
+- Agent + cylinder link profiles under `docs/agents/`, `docs/cylinders/`  
+- Version evolution matches AZ Signal Engine README style
 
-## v0.4.0 — Live World Counter + brand polish
+**6) Proposal ledger**  
+- Clop → toolchain pattern inside ffmpeg (not a separate cylinder)  
+- [Alcubierre rejected](../../docs/cylinders/REJECTED_ALCUBIERRE.md) · [Latents parked](../../docs/cylinders/PARKED_LATENTS.md)
 
-- **DoP:** Jul 14, 2026 · ~8:03 AM – ~8:46 AM EST (Neoborg hive resume through v0.4 UI/README)
-- Package version **0.4.0**.
-- **Live World Counter** (was “TOKEX CLOCK” / Live World Counter Clock): global panel, absolute per-node hive sync, users-online presence, Cloudflare Worker scaffold (`packages/tokex-clock`).
-- Brand: logo + tagline **evry drp cnts**; Grok (xAI) slot; API-link greying inventory; lifetime/this-chat borderless color panels.
-- Agents unchanged in set from v0.3; Neoborg broadcast + `tokex_clock` / `hive_store` are the net-new hive surface.
+**Tests:** `tests/test_peer_review_upgrades.py`  
+**Benchmark scaffold:** `packages/engine/benchmarks/README.md`
 
 ---
 
-## v0.3.1 — Live World Counter Clock (Neoborg hive)
+### v0.4.2 — Vision routing + Gemini quota recovery
+**Commit date:** 2026-07-15  
+**DoP:** ~9:55 PM – ~10:40 PM EST
 
-- **DoP:** Jul 14, 2026 · ~8:03 AM EST onward (global panel + hive resume)
-- **Tokopt / hive:** Neoborg unparks network path
-  - Discrete module: **Live World Counter Clock** (`tokex_clock.py` + `hive_store.py`)
-  - Option **B**: tiny always-on hive API (Cloudflare Worker scaffold in `packages/tokex-clock`); engine-local `/hive` until Worker URL is set
-  - Opt-in popup + global panel with local H:M:S clock + upright butterfly + hive saved-%
-- **UI:** three TOKEX panels — lifetime / this chat / global
+**1) OpenRouter + photos**  
+- Vision chain prefers VL/Gemma; skips text-only free IDs that 404 on images  
+- Clearer privacy/data-policy and busy-vision errors
 
----
+**2) Gemini grey-out** ([Argus](../../docs/agents/ARGUS.md))  
+- Time-bounded quota blocks (honor Google “retry in Xs”)  
+- Sticky forever-grey fixed; successful calls clear mark
 
-## v0.3.0 — fidelity + hive agents
-
-- **DoP:** Jul 14, 2026 · ~4:34 AM – ~5:42 AM EST (fidelity/agents/popup plan through v0.3.0 merge `dc7048d`)
-### Theme
-Everyday-user simplicity + **100% loyalty default** + factual agent ledger. Package version **0.3.0**.
-
-### Agents / agentics (innovative)
-| Agent | What it does |
-|---|---|
-| **Mumblz** | History titles (kept) |
-| **Argus** | Provider health / failover (kept, stack expanded) |
-| **Rainman** | Interrogates each run’s **tokopt cylinders** with *only* measured stage tags + TOKEX — **no LLM, no guesses** |
-| **Agatha** | SQLite archivist for Rainman briefs + cylinder fire counts |
-| **Mrs. Brown** | Matriarch hive intake — validates numeric TOKEX records |
-| **Neoborg** | Benevolent hive cross-vet + local ledger for future **TOKEX CLOCK** (network broadcast parked) |
-
-### Cylinder defaults this version
-- See **Tokopt cylinders (current register)** for full list.
-- Fidelity-first: **ITS OFF**, **pxpipe OFF**, vision billed both sides, max **16** images.
-
-### Everyday UX
-- New **Connect an AI** popup every session (unless “don’t show again”): signup links, plain-language hints, paid vs free badges, stack order, + add another key
-- Sidebar ⋮ explainers (connection / model / keys / status / PDF pages)
-- Groq **70b then 8b** after OpenRouter
-- Claude / ChatGPT / Perplexity / Groq keys supported when pasted
-
-### Fallback (simple)
-Paid you added (Claude → ChatGPT) first → **Gemini free first** among unpaid → OpenRouter free swarm → Groq 70b/8b → Perplexity.
-
-### Factual savings stats (at ship)
-- Agatha/Neoborg ledgers start empty until you run chats on this build → **unknown until first sealed runs**.
-- Rainman then reports measured run TOKEX; Agatha fire counts accumulate locally.
-
-### Not in this commit (parked)
-- Live multi-user Neoborg **TOKEX CLOCK** network broadcast (local ledger ready).
+**3) Auto + images**  
+- Do not silently strip vision onto Groq/text-only doors
 
 ---
 
-## v0.2 — product UI + cylinder concert (shipped line through `b108761`)
+### v0.4.1 — Gretta router + provider health UX
+**Commit date:** 2026-07-15  
+**DoP:** Jul 14–15 overnight through ~10:05 AM EST
 
-- **DoP:** Jul 13, 2026 · ~11:13 AM – ~2:21 PM EST (v0.2 packaging ship through multi-image + attachment thumbs)
-### Agents / agentics
-- **Argus** — live preflight; OpenRouter cools down *one busy model*, not the whole provider.
-- **Mumblz** — History chat naming agent (settled on **2 lowercase words**, no vowel-stripping).
+**1) Gretta agent** ([Gretta](../../docs/agents/GRETTA.md) · `agents/gretta.py`)  
+- Splash + API onboarding; curated protoprompter / qualifier / router  
+- Sidebar ask + `/gretta/recommend`; chatbox phases parked
 
-### Product innovations
-- Lifetime + this-chat **TOKEX** panels (lifetime = saved÷before, never resets on new chat)
-- History left / settings right; **tknsh** loader; attachment thumbs
-- Multi-image attach (was silently one-image — fixed) + vision cap warnings
-- Cylinder concert expanded (see **Tokopt cylinders** register below)
+**2) Argus soft grey-out** ([Argus](../../docs/agents/ARGUS.md))  
+- Quota / missing key / no credits reasons
 
-### Factual savings stats
-- **Unknown server-side** (no Agatha yet in v0.2). UI lifetime % lived in browser localStorage only.
+**3) Product UX**  
+- History dropdown so chat list cannot cover Gretta  
+- Passthrough parity for bare chat ([passthrough](../../docs/cylinders/PASSTHROUGH.md))
 
----
-
-## v0.1 — engine boots
-
-- **DoP:** Jul 13, 2026 · ~2:56 AM – ~11:00 AM EST (first commit through eve of formal v0.2 packaging)
-- **Innovative:** local FastAPI daemon + chat UI; optimize path before the model sees your prompt/files.
-- Early cylinders: ingest → LCS / envelope → TOKEX meter → provider dispatch.
-- API key wizard (Gemini / OpenRouter).
-- **Argus** beginnings.
+**4) Agent ledger polish**  
+- [Agatha](../../docs/agents/AGATHA.md) · [Rainman](../../docs/agents/RAINMAN.md) · [Neoborg](../../docs/agents/NEOBORG.md)
 
 ---
 
-## v0.0 → first spark (pre-public / prototype)
+### v0.4.0 — Live World Counter + brand polish
+**Commit date:** 2026-07-14  
+**DoP:** ~8:03 AM – ~8:46 AM EST
 
-- **DoP:** unknown pre-repo; first git commit **Jul 13, 2026 · ~2:56 AM EST** (`80df061`)
-- Idea: a local “token optimizer” you run like a small app, not a giant SaaS.
-- See neologisms: **TOKEX**, **Tokopt**, **Split-Execution**.
+**1) Live World Counter** ([tokex_clock](../../docs/agents/TOKEX_CLOCK.md) · [Neoborg](../../docs/agents/NEOBORG.md))  
+- Global panel, absolute per-node hive sync, users-online, CF Worker scaffold
 
----
-
-## Neologisms register
-
-Add every new tokenish coinage here when it is incepted. Keep definitions plain. Update **Active (v0.3 default)** when defaults change.
-
-### Core terms
-
-| Neologism | Meaning (plain) | Incepted | Implemented |
-|---|---|---|---|
-| **TOKEX** | **Tok**en **Ex**penditure — how many tokens a send would have cost *before* vs *after* tokenish; savings = before − after (never below zero) | v0.0 | v0.1+ meter; v0.2 dual lifetime/this-chat panels; v0.3 honesty for vision billing |
-| **Tokopt** | **Tok**en **opt**imization — Token Optimization; the practice/engine of shrinking what gets sent to an LLM while keeping meaning | v0.0–v0.1 (idea) | named as such in v0.2–v0.3 logs/agents |
-| **OptComp** | **Opt**imization / **Comp**ression engine — the tokopt pipeline that runs cylinders to optimize and/or compress what gets sent | v0.4.2 (named in register) | v0.1+ pipeline (as tokopt engine); named **OptComp** in docs |
-| **Tokopt cylinder** | One working stage inside the Tokopt / **OptComp** engine (like one piston). Cylinders fire in concert on each run; Rainman records which ones fired | v0.2 (named in product language) | v0.2 stages; v0.3 Rainman/Agatha ledger |
-| **Split-Execution** | Package the *job* and the *document/payload* so the model gets a cheaper, still-loyal send | v0.0 | v0.1+ LCS / envelopes |
-| **tknsh** | The little pulsing “t-k-n-s-h” wait animation in chat / attach staging | v0.2 | v0.2 UI |
-| **DoP** | Duration of Process — wall-clock window for a version’s work | v0.3 | v0.3 VERSION_LOG |
-| **TOKEX CLOCK** | Live global tally of tokens saved by tokenish users (Neoborg broadcast) | v0.3 (named) | **v0.3.1 Live World Counter Clock** — engine hive + Cloudflare Worker scaffold |
-| **Live World Counter** | Neoborg hive surface: collective TOKEX % + local H:M:S/zone + users online | v0.3.1 (as Clock) | **v0.4** renamed; engine hive + CF Worker scaffold |
-
-### Agents (agentics)
-
-| Agent | Meaning (plain) | Incepted | Implemented |
-|---|---|---|---|
-| **Argus** | Watchdog that checks which AIs are ready and handles fallback when one is busy | v0.1 | v0.1–v0.3 |
-| **Mumblz** | Names each History chat with two clear lowercase words | v0.2 | v0.2–v0.3 (no vowel-strip) |
-| **Rainman** | After each run, fact-checks which tokopt cylinders fired and what TOKEX measured — **no guessing, no LLM** | v0.3 | v0.3 (wired into every optimize seal) |
-| **Agatha** | Files Rainman’s briefs in a local SQLite archive (`~/.tokenish/agatha.db`) | v0.3 | v0.3 |
-| **Mrs. Brown** | Matriarch hive agent — accepts only valid numeric TOKEX records, then hands off to Neoborg | v0.3 | v0.3 |
-| **Neoborg** | Benevolent hive agent — cross-vet + ledger + Live World Counter broadcast | v0.3 | v0.3 ledger; **v0.4** live counter / sync |
-| **Gretta** | Onboarding + LLM **protoprompter / qualifier / router** via curated map + linked keys (not scrape-as-truth) | v0.4.1 | v0.4.1 splash/recommend; chatbox phases parked |
-
-### Tokopt cylinders (current register)
-
-**Tokopt** = Token Optimization. A **tokopt cylinder** is one working stage inside that optimization and/or compression engine (**OptComp**).
-
-| Cylinder | What it does (plain) | Incepted | **Active (v0.3 default)** |
-|---|---|---|---|
-| **ingest** | Reads uploads (PDF, Word, Excel, CSV, images, etc.) into usable text/images | v0.1 | **ON** (always when files attach) |
-| **LCS** | Cleans/package the instruction (“what you asked”) into a tighter form | v0.1 | **ON** |
-| **split-exec / envelope** | Builds the actual package sent to the AI (job + document layout) | v0.1 | **ON** when there is material to pack |
-| **Hi0** | Packs JSON-ish data more tightly without inventing content | v0.2 | **ON** when input looks like JSON |
-| **dedupe** | Removes repeated/near-duplicate pages or sections | v0.2 | **ON** when document text exists |
-| **format_csv** | Turns some array/JSON tables into cheaper CSV-like text | v0.2 | **ON** when applicable (non–follow-mode) |
-| **headroom** | Soft compression on long text logs/docs | v0.2 | **ON** (still blocked from lying by later verbatim/tokenizer gates) |
-| **ITS** | Drops *less-relevant* document chunks to save tokens (needs your OK) | v0.2 | **OFF** unless you check “allow skip less-relevant chunks” |
-| **FAISS / MIB** | Helps ITS pick which chunks matter (binary index assist) | v0.2 | **Standby** — only with ITS consent |
-| **pxpipe** | Packs dense text into an image for vision models when cheaper | v0.1–v0.2 | **OFF** by default (fidelity); also skipped for PDF/normal docs |
-| **tokenizer gate** | Rejects “fake savings” tricks (e.g. vowel shorthand that actually costs more) and keeps the cheaper loyal form | v0.2 | **ON** |
-| **vision (Pillow)** | Shrinks/normalizes attached photos before send; TOKEX bills vision on both before & after | v0.1 / honesty v0.3 | **ON** when images attach |
-| **passthrough** | Very short prompts with nothing to optimize — send as-is | v0.1 | **ON** when triggered |
-| **ffmpeg** | Planned media compress cylinder | named in plans | **NOT IMPLEMENTED** |
-| **Memtrove cloud** | Optional cloud retrieve assist | v0.2 probe | **NOT in optimize path** (local ITS is the in-engine cousin) |
-
-**v0.3 loyalty rule:** cylinders may **repackage** (how we bind the send). They must not quietly **omit** people’s material unless the user explicitly consents (ITS checkbox).
+**2) Brand**  
+- Logo + tagline **evry drp cnts**; Grok (xAI) slot; API-link greying inventory
 
 ---
 
-## Maintenance notes
+### v0.3.1 — Live World Counter Clock (Neoborg hive)
+**Commit date:** 2026-07-14  
+**DoP:** ~8:03 AM EST onward
 
-When committing a new version:
-1. Add **DoP:** `Mon DD, YYYY · ~H:MM AM/PM – ~H:MM AM/PM EST`
-2. If any **neologism** is new or redefined, update the tables (incepted + implemented columns).
-3. If any **tokopt cylinder** is added, removed, or changes default ON/OFF, update the cylinder register **Active** column.
-4. Never invent savings numbers in this log.
+**1) Hive modules**  
+- `tokex_clock.py` + `hive_store.py` + `packages/tokex-clock/` Worker scaffold
+
+**2) UI**  
+- Three TOKEX panels — lifetime / this chat / global
+
+---
+
+### v0.3.0 — fidelity + hive agents
+**Commit date:** 2026-07-14  
+**DoP:** ~4:34 AM – ~5:42 AM EST
+
+**1) Fidelity-first defaults**  
+- [ITS](../../docs/cylinders/ITS.md) OFF · [pxpipe](../../docs/cylinders/PXPIPE.md) OFF · vision billed both sides
+
+**2) Agentics**  
+- [Rainman](../../docs/agents/RAINMAN.md) · [Agatha](../../docs/agents/AGATHA.md) · [Mrs. Brown](../../docs/agents/MRS_BROWN.md) · [Neoborg](../../docs/agents/NEOBORG.md)
+
+**3) Connect-an-AI popup + expanded keys**  
+- Claude / ChatGPT / Perplexity / Groq when pasted
+
+**4) Cylinder concert**  
+- See [Cylinder Register](../../docs/cylinders/CYLINDER_REGISTER.md)
+
+---
+
+### v0.2 — product UI + cylinder concert
+**Commit date:** 2026-07-13  
+**DoP:** ~11:13 AM – ~2:21 PM EST
+
+**1) TOKEX panels** — lifetime + this-chat  
+**2) Mumblz** ([Mumblz](../../docs/agents/MUMBLZ.md))  
+**3) Cylinders expanded** — Hi0, dedupe, format_csv, headroom, ITS/FAISS, pxpipe, tokenizer gate, vision  
+**4) Multi-image attach fix**
+
+---
+
+### v0.1 — engine boots
+**Commit date:** 2026-07-13  
+**DoP:** ~2:56 AM – ~11:00 AM EST
+
+**1) FastAPI daemon + chat UI**  
+**2) Early path:** ingest → LCS/envelope → TOKEX → dispatch  
+**3) Argus beginnings** ([Argus](../../docs/agents/ARGUS.md))  
+**4) Key wizard** (Gemini / OpenRouter)
+
+---
+
+### v0.0 — first spark
+**Commit date:** 2026-07-13 (~2:56 AM EST first git `80df061`)  
+**DoP:** unknown pre-repo; first commit dated above
+
+**1) Idea:** local token optimizer app (not giant SaaS)  
+**2) Coinages:** TOKEX · Tokopt · Split-Execution
+
+---
+
+## Neologisms (core)
+
+| Term | Meaning |
+|------|---------|
+| **TOKEX** | Token Expenditure — before vs after; savings = max(0, before − after) |
+| **Tokopt** | Token Optimization |
+| **OptComp** | Optimization / Compression engine (cylinder pipeline) |
+| **Tokopt cylinder** | One working stage inside OptComp |
+| **Split-Execution** | Package job + document for cheaper loyal send |
+| **DoP** | Duration of Process |
+| **Live World Counter** | Neoborg hive global TOKEX surface |
+
+---
+
+## Maintenance
+
+1. Add newest version at top with **Commit date** + numbered `1)`, `2)`, `3)` blocks.  
+2. Link agents/cylinders to `docs/agents/` and `docs/cylinders/`.  
+3. Never invent savings numbers in this log.

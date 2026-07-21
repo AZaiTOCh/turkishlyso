@@ -191,15 +191,49 @@ def naive_baseline_prompt(human_prompt: str, raw_document_text: str) -> str:
 
 def pick_cheapest_envelope(candidates: list[tuple[str, str]]) -> tuple[str, str]:
     """Return (stage_name, envelope_text) with lowest token count."""
-    if not candidates:
+    ranked = rank_envelopes(candidates)
+    if not ranked:
         return ("empty", "")
-    best_stage, best_text = candidates[0]
-    best_n = count_tokens(best_text)
-    for stage, text in candidates[1:]:
-        n = count_tokens(text)
-        if n < best_n:
-            best_stage, best_text, best_n = stage, text, n
-    return best_stage, best_text
+    return ranked[0][0], ranked[0][1]
+
+
+def rank_envelopes(candidates: list[tuple[str, str]]) -> list[tuple[str, str, int]]:
+    """Return candidates sorted by ascending token count as (stage, text, tokens)."""
+    scored: list[tuple[str, str, int]] = []
+    for stage, text in candidates or []:
+        scored.append((stage, text, count_tokens(text)))
+    scored.sort(key=lambda row: row[2])
+    return scored
+
+
+def pick_gated_envelope(
+    candidates: list[tuple[str, str]],
+    *,
+    baseline: str,
+    min_fallbacks: int = 2,
+) -> tuple[str, str, list[str]]:
+    """
+    Try cheapest envelopes in order; keep the first that beats baseline under
+    the tokenizer gate. Ensures ≥2 ranked candidates are considered when present
+    so a gate reject has a fallback package (peer-review P0).
+    """
+    from tokenish_engine.compile.tokenizer_gate import apply_if_cheaper
+
+    ranked = rank_envelopes(candidates)
+    extras: list[str] = []
+    if not ranked:
+        return "empty", "", extras
+    limit = max(1, min_fallbacks)
+    for i, (stage, text, _) in enumerate(ranked[:limit]):
+        gated = apply_if_cheaper(baseline, text)
+        if gated == text:
+            if i > 0:
+                extras.append(f"envelope_fallback_{i + 1}")
+            return stage, text, extras
+        extras.append(f"envelope_gate_reject_{stage}")
+    # Nothing beat baseline among ranked candidates — return cheapest raw for
+    # downstream verbatim/shorthand handling.
+    return ranked[0][0], ranked[0][1], extras
 
 
 def document_verbatim_in_envelope(envelope: str, raw_document_text: str) -> bool:
