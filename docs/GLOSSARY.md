@@ -18,7 +18,7 @@ Parent index: [README](../README.md)
 | **Tokopt** | Token Optimization. |
 | **OptComp** | Optimization AND/OR Compression optionalized engine — the cylinder pipeline that can reduce TOKEX. |
 | **Tokopt cylinder** | One working stage (virtual core) inside OptComp. |
-| **[vTOPU](cylinders/CYLINDER_REGISTER.md)** | **V**irtual **T**oken **O**ptimization **P**rocessing **U**nit — register of OptComp cylinders / virtual cores. |
+| [**vToPU** (aka **vTOPU** production-side acronym](cylinders/CYLINDER_REGISTER.md)** | **V**irtual **T**oken **o**ptimization **P**rocessing **U**nit — register of OptComp cylinders / virtual cores. |
 | **virtual core** | Brand-facing name for a cylinder row in the vTOPU register. |
 | **Split-Execution** | Binding job + document into a cheaper loyal send layout (envelope / LCS family). |
 | **ITS** | Intentional Token Skip — consent-gated chunk drop ([ITS](cylinders/ITS.md)). |
