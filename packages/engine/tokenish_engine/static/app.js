@@ -56,6 +56,7 @@ const GRETTA_INTRO_KEY = "tokenish.gretta.intro.v3";
 const GRETTA_SEEN_KEY = "tokenish.gretta.seen.v3";
 const GRETTA_PICK_KEY = "tokenish.gretta.pick.v1";
 const GRETTA_FLOW = "tokenish.gretta.flow.v3"; // session step: intro|auth|api|keys|need|done
+const SIDEBAR_KEY = "tokenish.sidebars.v1";
 
 
 let files = [];
@@ -153,6 +154,13 @@ function activeThread() {
 function showError(msg) {
   errorEl.hidden = !msg;
   errorEl.textContent = msg || "";
+  errorEl.className = "error";
+}
+
+function showInfo(msg) {
+  errorEl.hidden = !msg;
+  errorEl.textContent = msg || "";
+  errorEl.className = msg ? "error info-note" : "error";
 }
 
 function fileExt(name) {
@@ -1411,17 +1419,117 @@ async function send() {
 }
 
 document.getElementById("attachBtn").onclick = () => fileInput.click();
-fileInput.onchange = async () => {
-  const incoming = Array.from(fileInput.files || []);
-  fileInput.value = "";
+document.getElementById("uploadImagesChip")?.addEventListener("click", () => {
+  document.getElementById("imageInput")?.click();
+});
+document.getElementById("uploadVideosChip")?.addEventListener("click", () => {
+  document.getElementById("videoInput")?.click();
+});
+async function onPickedFiles(inputEl) {
+  const incoming = Array.from(inputEl?.files || []);
+  if (inputEl) inputEl.value = "";
   await stageIncomingFiles(incoming);
-};
+}
+fileInput.onchange = () => onPickedFiles(fileInput);
+document.getElementById("imageInput")?.addEventListener("change", (e) => onPickedFiles(e.target));
+document.getElementById("videoInput")?.addEventListener("change", (e) => onPickedFiles(e.target));
 document.getElementById("sendBtn").onclick = () => send();
 document.getElementById("newChat").onclick = () => createChat();
 document.getElementById("historyToggle")?.addEventListener("click", () => {
   const open = document.getElementById("historyToggle")?.getAttribute("aria-expanded") !== "true";
   setHistoryOpen(open);
 });
+
+function readSidebarPrefs() {
+  try {
+    return JSON.parse(localStorage.getItem(SIDEBAR_KEY) || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+function writeSidebarPrefs(next) {
+  localStorage.setItem(SIDEBAR_KEY, JSON.stringify(next));
+}
+function isNarrowChrome() {
+  return window.matchMedia("(max-width: 1100px)").matches;
+}
+function syncSidebarScrim() {
+  const shell = document.getElementById("appShell");
+  const scrim = document.getElementById("sidebarScrim");
+  if (!shell || !scrim) return;
+  const show = isNarrowChrome() && (shell.classList.contains("left-open") || shell.classList.contains("right-open"));
+  scrim.hidden = !show;
+}
+function setSidebarOpen(side, open) {
+  const shell = document.getElementById("appShell");
+  if (!shell) return;
+  const cls = side === "left" ? "left-open" : "right-open";
+  shell.classList.toggle(cls, !!open);
+  const btn = document.getElementById(side === "left" ? "toggleLeftSidebar" : "toggleRightSidebar");
+  if (btn) {
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    const label = side === "left" ? "history" : "models";
+    btn.title = open ? `Hide ${label} sidebar` : `Show ${label} sidebar`;
+  }
+  const prefs = readSidebarPrefs();
+  prefs[side] = !!open;
+  writeSidebarPrefs(prefs);
+  syncSidebarScrim();
+}
+function initSidebars() {
+  const prefs = readSidebarPrefs();
+  const narrow = isNarrowChrome();
+  // Desktop defaults open; narrow defaults closed (drawer pattern).
+  const left = typeof prefs.left === "boolean" ? prefs.left : !narrow;
+  const right = typeof prefs.right === "boolean" ? prefs.right : !narrow;
+  setSidebarOpen("left", left);
+  setSidebarOpen("right", right);
+}
+document.getElementById("toggleLeftSidebar")?.addEventListener("click", () => {
+  const shell = document.getElementById("appShell");
+  const open = !shell?.classList.contains("left-open");
+  if (open && isNarrowChrome()) setSidebarOpen("right", false);
+  setSidebarOpen("left", open);
+});
+document.getElementById("toggleRightSidebar")?.addEventListener("click", () => {
+  const shell = document.getElementById("appShell");
+  const open = !shell?.classList.contains("right-open");
+  if (open && isNarrowChrome()) setSidebarOpen("left", false);
+  setSidebarOpen("right", open);
+});
+document.getElementById("sidebarScrim")?.addEventListener("click", () => {
+  setSidebarOpen("left", false);
+  setSidebarOpen("right", false);
+});
+window.addEventListener("resize", () => syncSidebarScrim());
+document.getElementById("engineToggle")?.addEventListener("click", () => {
+  const btn = document.getElementById("engineToggle");
+  const menu = document.getElementById("engineMenu");
+  if (!btn || !menu) return;
+  const open = btn.getAttribute("aria-expanded") !== "true";
+  btn.setAttribute("aria-expanded", open ? "true" : "false");
+  menu.hidden = !open;
+  menu.classList.toggle("open", open);
+});
+document.getElementById("openResgents")?.addEventListener("click", () => {
+  showInfo("Resgents = native agents from the mother codebase (not plugged in). Reserve Agents spawn on demand; Resident Agents are programmed in. Leaner/tighter than external agents — LPU vs GPU.");
+});
+document.getElementById("openMiddleware")?.addEventListener("click", () => {
+  showInfo("Nemean = Privacy Middleware (TOKISH): sits between the core engine and apps/data to enforce privacy, masking, or encryption. Local default + Azure-direct optional — zero prompt proxy. Free tokenish stays OptComp-only.");
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    if (isNarrowChrome()) {
+      setSidebarOpen("left", false);
+      setSidebarOpen("right", false);
+    }
+  }
+  if (e.ctrlKey && e.shiftKey && (e.key === "O" || e.key === "o")) {
+    e.preventDefault();
+    createChat();
+  }
+});
+initSidebars();
 document.querySelectorAll(".tokex-details-btn").forEach((btn) => {
   btn.addEventListener("click", (e) => {
     e.stopPropagation();

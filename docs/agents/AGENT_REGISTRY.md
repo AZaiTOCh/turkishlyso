@@ -2,6 +2,8 @@
 
 Canonical profiles for agentics. Append role history in each profile; do not invent savings here.
 
+**Taxonomy (v0.5.0+):** native agentics are **[resgents](RESGENTS.md)** — Reserve (spawned) or Resident (programmed into the mother codebase). Not external plugged-in agents.
+
 | # | Agent | Role | Since |
 |---|-------|------|-------|
 | 1 | [Argus](ARGUS.md) | Provider health / failover | v0.1 |
@@ -12,5 +14,7 @@ Canonical profiles for agentics. Append role history in each profile; do not inv
 | 6 | [Neoborg](NEOBORG.md) | Cross-vet + Live World Counter broadcast | v0.3 |
 | 7 | [Gretta](GRETTA.md) | Onboarding + curated LLM router | v0.4.1 |
 | 8 | [ZamanZamin](ZAMANZAMIN.md) | Live World Counter client module | v0.3.1 |
+
+**Privacy Middleware (TOKISH):** [Nemean](../middleware/NEMEAN.md) — not a resgent; sits between engine and apps/data.
 
 Code: `packages/engine/tokenish_engine/agents/`

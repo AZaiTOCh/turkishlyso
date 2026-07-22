@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>tokenish</title>
   <link href="https://fonts.googleapis.com/css2?family=Arimo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/ui/styles.css?v=0.4.5g" />
+  <link rel="stylesheet" href="/ui/styles.css?v=0.5.0" />
 </head>
 <body>
-  <div class="app">
-    <aside class="sidebar history-sidebar">
+  <div class="app left-open right-open" id="appShell">
+    <aside class="sidebar history-sidebar" id="historySidebar" aria-label="History">
       <div class="brand">
         <div class="brand-title-row">
           <img class="brand-logo" src="/ui/media/tokenish-logo.png?v=0.4.2" alt="" width="57" height="57" />
@@ -17,9 +17,20 @@
         </div>
         <hr class="brand-rule" />
         <div class="brand-tagline">evry drp cnts</div>
-        <span class="brand-sub" id="brandSub">token use optimizer · v0.4.5</span>
+        <span class="brand-sub" id="brandSub">token use optimizer · v0.5.0</span>
       </div>
-      <button class="btn primary full new-chat" id="newChat" type="button">new chat</button>
+      <button class="btn primary full new-chat" id="newChat" type="button" title="New chat (Ctrl+Shift+O)">new chat</button>
+      <div class="engine-block">
+        <button type="button" class="engine-toggle" id="engineToggle" aria-expanded="false" aria-controls="engineMenu">
+          <span class="section-label engine-toggle-label">engine</span>
+          <span class="history-caret" aria-hidden="true">▾</span>
+        </button>
+        <div class="engine-menu" id="engineMenu" hidden>
+          <a class="engine-link" href="https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md" target="_blank" rel="noopener" title="Virtual cores that compress work before it hits an LLM">cylinders *</a>
+          <button type="button" class="engine-link" id="openResgents" title="Native agents spawned from or programmed into the mother codebase (Reserve + Resident)">resgents *</button>
+          <button type="button" class="engine-link" id="openMiddleware" title="Privacy Middleware — Nemean sits between the engine and data/apps to enforce privacy">middleware *</button>
+        </div>
+      </div>
       <div class="history-block">
         <button type="button" class="history-toggle" id="historyToggle" aria-expanded="false" aria-controls="threadList">
           <span class="section-label history-toggle-label">history</span>
@@ -39,6 +50,22 @@
     </aside>
 
     <main class="main">
+      <div class="chrome-bar">
+        <div class="chrome-left">
+          <button type="button" class="chrome-toggle" id="toggleLeftSidebar" aria-controls="historySidebar" aria-expanded="true" title="Hide history sidebar">
+            <span class="chrome-toggle-icon" aria-hidden="true">❙❚</span>
+            <span class="chrome-toggle-label">history</span>
+          </button>
+          <span class="chrome-brand-mini" aria-hidden="true">tokenish</span>
+        </div>
+        <div class="chrome-right">
+          <button type="button" class="chrome-toggle" id="toggleRightSidebar" aria-controls="settingsSidebar" aria-expanded="true" title="Hide providers &amp; models">
+            <span class="chrome-toggle-label">models</span>
+            <span class="chrome-toggle-icon" aria-hidden="true">❚❙</span>
+          </button>
+        </div>
+      </div>
+      <div class="sidebar-scrim" id="sidebarScrim" hidden></div>
       <div class="topbar">
         <div class="tokex-row">
           <div class="tokex-panel lifetime" id="tokexLifetimePanel">
@@ -106,14 +133,26 @@
         </label>
         <div class="row">
           <button class="btn" id="attachBtn">attach</button>
-          <input id="fileInput" type="file" multiple hidden accept=".pdf,.docx,.doc,.xlsx,.xls,.csv,.txt,.md,.json,.png,.jpg,.jpeg,.webp" />
+          <input id="fileInput" type="file" multiple hidden accept=".pdf,.docx,.doc,.xlsx,.xls,.csv,.txt,.md,.json,.png,.jpg,.jpeg,.webp,.gif,.bmp,.mp4,.webm,.mov" />
+          <input id="imageInput" type="file" multiple hidden accept="image/png,image/jpeg,image/webp,image/gif,image/bmp,.png,.jpg,.jpeg,.webp,.gif,.bmp" />
+          <input id="videoInput" type="file" multiple hidden accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" />
           <textarea id="prompt" class="prompt-box" placeholder="tell me what kind of material you want to upload here (no legal / scientific / contracts / mission-critical)"></textarea>
           <button class="btn primary" id="sendBtn">send</button>
+        </div>
+        <div class="upload-chips" id="uploadChips" aria-label="Quick uploads">
+          <button type="button" class="upload-chip" id="uploadImagesChip" title="PNG, JPG, WEBP, GIF, BMP — skip screenshots of dense legal/scientific pages if you need full fidelity">
+            <span class="upload-chip-title">upload images</span>
+            <span class="upload-chip-blurb">photos, UI captures, diagrams — not dense legal/scientific page scans if fidelity matters</span>
+          </button>
+          <button type="button" class="upload-chip" id="uploadVideosChip" title="Short MP4 / WEBM / MOV clips — tokenish frames them; long lectures burn tokens">
+            <span class="upload-chip-title">upload videos</span>
+            <span class="upload-chip-blurb">short clips &amp; demos — not hour-long lectures or mission-critical footage</span>
+          </button>
         </div>
       </div>
     </main>
 
-    <aside class="sidebar settings-sidebar">
+    <aside class="sidebar settings-sidebar" id="settingsSidebar" aria-label="Providers and models">
       <div class="slot-head">
         <div class="section-label"><span class="slot-dot" id="connectionDot" aria-hidden="true"></span>connection</div>
         <button class="menu-btn slot-help-btn" type="button" data-help="connection" title="what is this?" aria-label="connection help">⋮</button>
@@ -368,6 +407,6 @@
       </div>
     </div>
   </div>
-  <script src="/ui/app.js?v=0.4.5g"></script>
+  <script src="/ui/app.js?v=0.5.0"></script>
 </body>
 </html>

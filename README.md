@@ -1,8 +1,10 @@
 # tokenish
 
-**Version:** 0.4.5 · **Runtime:** local FastAPI daemon + chat UI · **GitHub:** [`tknsh/tokenish`](https://github.com/tknsh/tokenish)
+**Version:** 0.5.0 · **Runtime:** local FastAPI daemon + chat UI · **GitHub:** [`tknsh/tokenish`](https://github.com/tknsh/tokenish)
 
 Open-source **token use optimizer**. Every prompt and attachment runs through a **split-execution / tokopt (OptComp)** pipeline, then dispatches to the model you select.
+
+**TOKISH** (paid surface, inducted v0.5.0) = free tokenish + **[Nemean](docs/middleware/NEMEAN.md) Privacy Middleware**. Free tokenish stays OptComp-only.
 
 *evry drp cnts*
 
@@ -15,7 +17,8 @@ Open-source **token use optimizer**. Every prompt and attachment runs through a 
 | **Runtime** | Local daemon (`127.0.0.1:8741`) + static chat UI |
 | **Language** | Python 3.10+ |
 | **OptComp** | Tokopt cylinders — see [vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register |
-| **Agentics** | **1)** Argus · **2)** Mumblz · **3)** Rainman · **4)** Agatha · **5)** Mrs. Brown · **6)** Neoborg · **7)** Gretta · **8)** ZamanZamin — [Agent Registry](docs/agents/AGENT_REGISTRY.md) |
+| **Agentics** | **[Resgents](docs/agents/RESGENTS.md)** (Resident): Argus · Mumblz · Rainman · Agatha · Mrs. Brown · Neoborg · Gretta · ZamanZamin — [Agent Registry](docs/agents/AGENT_REGISTRY.md) |
+| **Middleware** | **[Nemean](docs/middleware/NEMEAN.md)** Privacy Middleware (TOKISH) |
 | **Providers** | Gemini 3.5 Flash, OpenRouter, OpenAI, Anthropic, Groq, Grok, Perplexity (user keys) |
 | **Hive** | Live World Counter — engine-local + optional Cloudflare Worker (`packages/tokex-clock/`) |
 | **Version control** | GitHub — [`tknsh/tokenish`](https://github.com/tknsh/tokenish) |
@@ -107,6 +110,14 @@ Full chronology: [`packages/engine/VERSION_LOG.md`](packages/engine/VERSION_LOG.
 ## Version evolution
 
 Listed **newest → oldest**. Changes use **`1)`, `2)`, `3)`** format. Detail + DoP: [`VERSION_LOG.md`](packages/engine/VERSION_LOG.md).
+
+### v0.5.0 — TOKISH induction · dual slide-out UI · resgents · Nemean Privacy Middleware
+**DoP:** 2026-07-22
+
+**1)** Left + right slide-out sidebars (ChatGPT/Claude pattern); Gretta + providers kept  
+**2)** Engine menu: cylinders · **resgents** (Reserve/Resident) · **middleware** (Nemean)  
+**3)** Upload images/videos chips; taxonomy docs for resgents + Nemean  
+**4)** Free tokenish = OptComp; TOKISH = tokenish + Nemean Privacy Middleware  
 
 ### v0.4.5 — Gretta fidelity gate · Auto lock · [vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) · reply stamps
 **Commit timestamp:** 2026-07-22 07:17:39 -04:00

@@ -7,7 +7,34 @@ Factual release ledger. **Measured** = real TOKEX/Agatha numbers. **Unknown** = 
 
 Listed **newest → oldest**. Changes inside each version use the concise **`1)`, `2)`, `3)`** format for instant review. Commit dates are first release commits on `main` (or DoP day when pre-tag).
 
-**Agents:** [Agent Registry](../../docs/agents/AGENT_REGISTRY.md) · **Cylinders:** [vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register
+**Agents:** [Agent Registry](../../docs/agents/AGENT_REGISTRY.md) · **Cylinders:** [vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register · **Resgents:** [RESGENTS](../../docs/agents/RESGENTS.md) · **Middleware:** [Nemean](../../docs/middleware/NEMEAN.md)
+
+---
+
+### v0.5.0 — TOKISH induction · dual slide-out UI · resgents · Nemean Privacy Middleware
+**Commit timestamp:** (this release)  
+**DoP:** 2026-07-22
+
+Inducts **TOKISH** (= free tokenish OptComp + Nemean Privacy Middleware) into the product taxonomy while keeping free tokenish OptComp-only.
+
+**1) Dual slide-out chrome (ChatGPT/Claude pattern)**  
+- Left history + right providers/models slide out/in; chrome toggles; prefs remembered  
+- Narrow viewports: overlay drawers + scrim; Escape closes  
+- Kept Gretta popups, hover/⋮ helps, provider/model panel contents
+
+**2) Engine menu**  
+- **cylinders *** → [vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md)  
+- **resgents *** → native mother-codebase agents (Reserve spawn / Resident programmed); not plugged-in agents  
+- **middleware *** → [Nemean](../../docs/middleware/NEMEAN.md) Privacy Middleware (replaces “subengine plug-in” class)
+
+**3) Upload chips (PDF layout notes)**  
+- `upload images` / `upload videos` with accept/reject blurbs; third “look up” chip dropped
+
+**4) Taxonomy lock**  
+- Resgents ≠ reagents; Nemean = Privacy Middleware between core engine and apps/data  
+- Modes unchanged in policy: C Sovereign local default · A Azure-direct optional · zero prompt proxy
+
+**Out of scope this cut:** full Nemean runtime (Ollama/Azure-direct wiring); Reserve spawn API
 
 ---
 

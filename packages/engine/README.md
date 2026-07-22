@@ -1,6 +1,6 @@
 # Tokenish Engine
 
-FastAPI Split-Execution / tokopt optimizer (**v0.4.5**).
+FastAPI Split-Execution / tokopt optimizer (**v0.5.0**). TOKISH inducts [Nemean](../../docs/middleware/NEMEAN.md) Privacy Middleware; free tokenish remains OptComp-only.
 
 ```bash
 pip install -e ".[dev]"
