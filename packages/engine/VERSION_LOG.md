@@ -12,7 +12,7 @@ Listed **newest → oldest**. Changes inside each version use the concise **`1)`
 ---
 
 ### v0.5.0 — TOKISH induction · dual slide-out UI · resgents · Nemean Privacy Middleware
-**Commit timestamp:** (this release)  
+**Commit timestamp:** 2026-07-22 10:57:29 -04:00 (US Eastern)  
 **DoP:** 2026-07-22
 
 Inducts **TOKISH** (= free tokenish OptComp + Nemean Privacy Middleware) into the product taxonomy while keeping free tokenish OptComp-only.
