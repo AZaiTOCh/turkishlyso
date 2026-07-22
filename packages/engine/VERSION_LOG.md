@@ -43,6 +43,8 @@ Product UX + registry rename after peer-review charter work. Fidelity-first: uns
 
 **Post-ship doc fix (same version, 2026-07-22 07:32:54 -04:00):** column swap for [vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md); `tokex_clock` branded **ZamanZamin**; every `vToPU` mention links the register; logo +10% again.
 
+**Post-ship UX fix (same version, 2026-07-22 07:37:13 -04:00):** Gretta launch flow — incomplete onboarding always restarts at intro (“Hi I’m Gretta”), not API-only; onboard marked done after need/upload step.
+
 **Out of scope this cut:** dedicated Qwen/Kimi/Gemma popup slots (use OpenRouter umbrella); AZ Signal Engine daemon wrap (AZ already has Hi0+TOKEX; verdict rarely)
 
 ---

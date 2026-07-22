@@ -52,9 +52,10 @@ const PROVIDER_OPTION_LABELS = {
 let providerHealth = {};
 
 const AUTH_KEY = "tokenish.auth.v1";
-const GRETTA_INTRO_KEY = "tokenish.gretta.intro.v1";
-const GRETTA_SEEN_KEY = "tokenish.gretta.seen.v1";
+const GRETTA_INTRO_KEY = "tokenish.gretta.intro.v2";
+const GRETTA_SEEN_KEY = "tokenish.gretta.seen.v2";
 const GRETTA_PICK_KEY = "tokenish.gretta.pick.v1";
+const GRETTA_ONBOARD_DONE = "tokenish.gretta.onboard.v2";
 
 let files = [];
 let threads = [];
@@ -1481,21 +1482,31 @@ function showModal(id, on) {
   if (el) el.hidden = !on;
 }
 
+function markGrettaOnboardDone() {
+  localStorage.setItem(GRETTA_ONBOARD_DONE, "1");
+  sessionStorage.setItem(GRETTA_INTRO_KEY, "1");
+  sessionStorage.setItem(GRETTA_SEEN_KEY, "1");
+}
+
+function isGrettaOnboardDone() {
+  return localStorage.getItem(GRETTA_ONBOARD_DONE) === "1";
+}
+
 async function startLaunchFlow() {
-  // Strict order: Gretta intro → sign-in → API explainer → key list.
-  if (!sessionStorage.getItem(GRETTA_INTRO_KEY)) {
-    showModal("grettaModal", true);
+  // Strict order: Gretta intro → sign-in → API explainer → key list → need/upload.
+  // If onboarding never finished, ALWAYS restart at intro (don't land on API-only).
+  if (isGrettaOnboardDone()) {
+    await maybeShowKeyWizard(false);
     return;
   }
-  if (!loadAuth()) {
-    showModal("authModal", true);
-    return;
-  }
-  if (!sessionStorage.getItem(GRETTA_SEEN_KEY)) {
-    showModal("grettaApiModal", true);
-    return;
-  }
-  await maybeShowKeyWizard();
+  sessionStorage.removeItem(GRETTA_INTRO_KEY);
+  sessionStorage.removeItem(GRETTA_SEEN_KEY);
+  showModal("authModal", false);
+  showModal("grettaApiModal", false);
+  showModal("grettaNeedModal", false);
+  const keyModal = document.getElementById("keyModal");
+  if (keyModal) keyModal.hidden = true;
+  showModal("grettaModal", true);
 }
 
 document.getElementById("grettaStart")?.addEventListener("click", () => {
@@ -1703,6 +1714,7 @@ document.getElementById("grettaNeedGo")?.addEventListener("click", async () => {
   const gate = assessMaterialSuitability(files, need);
   if (!gate.ok) {
     showModal("grettaNeedModal", false);
+    markGrettaOnboardDone();
     publishGrettaNote(gate.note, { blocked: true });
     const slotAsk = document.getElementById("grettaAsk");
     if (slotAsk) slotAsk.value = need;
@@ -1710,6 +1722,7 @@ document.getElementById("grettaNeedGo")?.addEventListener("click", async () => {
   }
   const data = await resolveGrettaNeed(need);
   showModal("grettaNeedModal", false);
+  markGrettaOnboardDone();
   publishGrettaNote(gate.note || data?.note || "lined up.", { blocked: false });
   const slotAsk = document.getElementById("grettaAsk");
   if (slotAsk) slotAsk.value = need;
@@ -1717,6 +1730,7 @@ document.getElementById("grettaNeedGo")?.addEventListener("click", async () => {
 
 document.getElementById("grettaNeedSkip")?.addEventListener("click", () => {
   showModal("grettaNeedModal", false);
+  markGrettaOnboardDone();
   publishGrettaNote("Thx for the API setup! Upload ur material so I can see if we can help.", { blocked: false });
 });
 
