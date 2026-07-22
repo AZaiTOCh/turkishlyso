@@ -8,7 +8,7 @@ Open-source **token use optimizer**. Every prompt and attachment runs through a 
 
 **tokenish** UI/interface is 'egoless' (minimalist/utilitarian motif respecting user's ease of navigation and mouse mileage)
 
-**tokenish** Enterprise Subscribtion upgrade is called **TOKISH** (paid surface, inducted in v0.5.0). **TOKISH** = freemium **tokenish** + **[Nemean](docs/middleware/NEMEAN.md) Privacy Middleware**. Free tokenish stays OptComp-only.
+**tokenish** Enterprise subscribtion upgrade version is called **TOKISH** (paid surface, inducted in v0.5.0). **TOKISH** = freemium **tokenish** + **[Nemean](docs/middleware/NEMEAN.md) Privacy Middleware**. Free tokenish stays OptComp-only.
 
 *evry drp cnts*
 
