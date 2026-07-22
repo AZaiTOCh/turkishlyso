@@ -17,11 +17,28 @@ Open-source **token use optimizer**. Every prompt and attachment runs through a 
 | **Runtime** | Local daemon (`127.0.0.1:8741`) + static chat UI |
 | **Language** | Python 3.10+ |
 | **OptComp** | Tokopt cylinders — see [vTOPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register |
-| **Agentics** | **[Resgents](docs/agents/RESGENTS.md)** (Resident): Argus · Mumblz · Rainman · Agatha · Mrs. Brown · Neoborg · Gretta · ZamanZamin — [Agentic Registry](docs/agents/AGENTIC_REGISTRY.md) |
+| **Agentics** | [Agentic Registry](docs/agents/AGENTIC_REGISTRY.md) — Engineship (Agent \| Resgent) × Status (Plug-in \| Reserve \| Resident); see [glossary](#glossary-engineship--resgents) |
 | **Middleware** | **[Nemean](docs/middleware/NEMEAN.md)** Privacy Middleware (TOKISH) |
 | **Providers** | Gemini 3.5 Flash, OpenRouter, OpenAI, Anthropic, Groq, Grok, Perplexity (user keys) |
 | **Hive** | Live World Counter — engine-local + optional Cloudflare Worker (`packages/tokex-clock/`) |
 | **Version control** | GitHub — [`tknsh/tokenish`](https://github.com/tknsh/tokenish) |
+
+---
+
+## Glossary — Engineship & resgents
+
+| Term | Definition |
+|------|------------|
+| **Engineship** | Citizenship-like standing of an agentic **relative to an engine**: **Agent** (general / migrant) or **Resgent** (native, lean, mother-codebase specialized). |
+| **Resgent** | Engineship class: native agentic form — spawned from or programmed for the local codebase; intended lighter than plugged-in general agents ([RESGENTS](docs/agents/RESGENTS.md)). |
+| **Status: Plug-in** | Migrant / bolt-on orientation (or archive/dispatch sibling). Can evolve toward Resident resgent if finetuned for this engine. |
+| **Status: Reserve** | Callable specialist — product intent to spawn on demand from the mother tree (spawn runtime still landing). |
+| **Status: Resident** | Always-present specialist on the mother engine path. |
+| **vTOPU** | Virtual Token Optimization Processing Unit — OptComp cylinder register ([CYLINDER_REGISTER](docs/cylinders/CYLINDER_REGISTER.md)). |
+| **OptComp / Tokopt** | The compression pipeline; **cylinders** save TOKEX. Most agentics measure, gate, route, or broadcast — they are not automatic TOKEX compressors. |
+| **TOKEX** | Token Expenditure — before vs after; savings = max(0, before − after). **Measured** only from sealed runs / Agatha — never invented. |
+
+Canonical roster: [Agentic Registry](docs/agents/AGENTIC_REGISTRY.md).
 
 ---
 
@@ -211,7 +228,7 @@ Listed **newest → oldest**. Changes use **`1)`, `2)`, `3)`** format. Detail + 
 
 | Doc | Path |
 |-----|------|
-| [Agentic Registry](docs/agents/AGENTIC_REGISTRY.md) | Canonical resgent profiles |
+| [Agentic Registry](docs/agents/AGENTIC_REGISTRY.md) | Engineship × Status roster for agentics |
 | [vTOPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register | OptComp / [vTOPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) cylinder (virtual core) profiles |
 | [VERSION_LOG](packages/engine/VERSION_LOG.md) | Full version evolution + DoP |
 | [Engine README](packages/engine/README.md) | FastAPI endpoints |

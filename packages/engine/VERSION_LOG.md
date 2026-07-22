@@ -7,7 +7,7 @@ Factual release ledger. **Measured** = real TOKEX/Agatha numbers. **Unknown** = 
 
 Listed **newest → oldest**. Changes inside each version use the concise **`1)`, `2)`, `3)`** format for instant review. Commit dates are first release commits on `main` (or DoP day when pre-tag).
 
-**Resgents:** [Agentic Registry](../../docs/agents/AGENTIC_REGISTRY.md) · **Cylinders:** [vTOPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register · **Middleware:** [Nemean](../../docs/middleware/NEMEAN.md)
+**Resgents / agentics:** [Agentic Registry](../../docs/agents/AGENTIC_REGISTRY.md) · **Cylinders:** [vTOPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register · **Middleware:** [Nemean](../../docs/middleware/NEMEAN.md)
 
 ---
 
