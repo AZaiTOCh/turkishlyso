@@ -1,4 +1,4 @@
-# ZamanZamin (Live World Counter client)
+# ZamanZamin (زمان زمین) translates to "Time and Earth" in Persian (Live World Counter client)
 
 **Brand:** ZamanZamin · **legacy code id:** `tokex_clock`
 
