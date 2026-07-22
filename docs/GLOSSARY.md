@@ -13,7 +13,7 @@ Parent index: [README](../README.md)
 | Term | Definition |
 |------|------------|
 | **tokenish** | Open OptComp optimizer (free surface) — local daemon + chat UI. |
-| **TOKISH** | Paid surface = free tokenish + [Nemean](middleware/NEMEAN.md) Privacy Middleware. |
+| **TOKISH** | Paid/Enterprise version of **tokenish** (**TOKISH = free **tokenish** + [Nemean](middleware/NEMEAN.md) Privacy Middleware). |
 | **TOKEX** | Token Expenditure — before vs after; savings = max(0, before − after). **Measured** only from sealed runs / Agatha — never invented. |
 | **Tokopt** | Token Optimization. |
 | **OptComp** | Optimization / Compression engine — the cylinder pipeline that can reduce TOKEX. |
