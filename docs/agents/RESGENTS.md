@@ -28,4 +28,4 @@ Because they grow from the mother tree (rather than being bolted on), a resgent 
 
 ## Registry note
 
-Existing tokenish agents in [AGENT_REGISTRY.md](AGENT_REGISTRY.md) are **Resident** resgents unless marked otherwise. Reserve spawning lands with TOKISH tooling.
+Existing tokenish resgents in [AGENTIC_REGISTRY.md](AGENTIC_REGISTRY.md) (**Agentic Registry**) are **Resident** resgents unless marked otherwise. Reserve spawning lands with TOKISH tooling.

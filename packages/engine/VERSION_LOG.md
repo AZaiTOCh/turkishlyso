@@ -7,7 +7,7 @@ Factual release ledger. **Measured** = real TOKEX/Agatha numbers. **Unknown** = 
 
 Listed **newest → oldest**. Changes inside each version use the concise **`1)`, `2)`, `3)`** format for instant review. Commit dates are first release commits on `main` (or DoP day when pre-tag).
 
-**Agents:** [Agent Registry](../../docs/agents/AGENT_REGISTRY.md) · **Cylinders:** [vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register · **Resgents:** [RESGENTS](../../docs/agents/RESGENTS.md) · **Middleware:** [Nemean](../../docs/middleware/NEMEAN.md)
+**Resgents:** [Agentic Registry](../../docs/agents/AGENTIC_REGISTRY.md) · **Cylinders:** [vTOPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register · **Middleware:** [Nemean](../../docs/middleware/NEMEAN.md)
 
 ---
 
@@ -23,7 +23,7 @@ Inducts **TOKISH** (= free tokenish OptComp + Nemean Privacy Middleware) into th
 - Kept Gretta popups, hover/⋮ helps, provider/model panel contents
 
 **2) Engine menu**  
-- **cylinders *** → [vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md)  
+- **cylinders *** → [vTOPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md)  
 - **resgents *** → native mother-codebase agents (Reserve spawn / Resident programmed); not plugged-in agents  
 - **middleware *** → [Nemean](../../docs/middleware/NEMEAN.md) Privacy Middleware (replaces “subengine plug-in” class)
 
@@ -38,7 +38,7 @@ Inducts **TOKISH** (= free tokenish OptComp + Nemean Privacy Middleware) into th
 
 ---
 
-### v0.4.5 — Gretta fidelity gate · Auto lock · [vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) · reply stamps
+### v0.4.5 — Gretta fidelity gate · Auto lock · [vTOPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) · reply stamps
 **Commit timestamp:** 2026-07-22 07:17:39 -04:00 (US Eastern)  
 **DoP:** 2026-07-22
 
@@ -59,7 +59,7 @@ Product UX + registry rename after peer-review charter work. Fidelity-first: uns
 - Chatbox grey placeholder warns off legal/scientific/contracts/mission-critical  
 - Hover tip on **fidelity loss**; send blocked when gate fails
 
-**4) [vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register** (was Cylinder Register)  
+**4) [vTOPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register** (was Cylinder Register)  
 - Glossary links: Virtual · Token Optimization · Processing Unit · virtual cores  
 - Columns: `#` · Cylinders (virtual cores = brand) · Type (technical profile) · Status · Since  
 - Brands: Ingestly, Luxy, Volpe, Highzero, Slimz, Forciv, Max, Chunkdrop, Chump, Pixish, Tokegater, Previsioner, Passopter, Fidelvid, Memtrove ([Moorcheh](https://github.com/moorcheh-ai))  
@@ -68,7 +68,7 @@ Product UX + registry rename after peer-review charter work. Fidelity-first: uns
 **5) UI polish**  
 - Logo enlarged; tagline *evry drp cnts* (no `Tag:` prefix); cache bust `?v=0.4.5`
 
-**Post-ship doc fix (same version, 2026-07-22 07:32:54 -04:00):** column swap for [vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md); `tokex_clock` branded **ZamanZamin**; every `vToPU` mention links the register; logo +10% again.
+**Post-ship doc fix (same version, 2026-07-22 07:32:54 -04:00):** column swap for [vTOPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md); `tokex_clock` branded **ZamanZamin**; every `vTOPU` mention links the register; logo +10% again.
 
 **Post-ship UX fix (same version, 2026-07-22 07:37:13 -04:00):** Gretta launch flow — incomplete onboarding always restarts at intro (“Hi I’m Gretta”), not API-only; onboard marked done after need/upload step.
 
@@ -208,7 +208,7 @@ Implements peer-pack P0/P1: sequential Rainman deltas, dual envelope gate fallba
 - Claude / ChatGPT / Perplexity / Groq when pasted
 
 **4) Cylinder concert**  
-- See [vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register
+- See [vTOPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register
 
 ---
 

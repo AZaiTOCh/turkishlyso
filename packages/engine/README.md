@@ -16,5 +16,5 @@ Optional form flags on `/chat` and `/compile`: `enable_its`, `enable_ffmpeg` (bo
 Agents live under `tokenish_engine/agents/` (Mumblz, Rainman, Agatha, Mrs. Brown, Neoborg, Gretta, ZamanZamin / tokex_clock). Media cylinder: `tokenish_engine/media/`. Hive store: `hive_store.py`. Worldwide Worker scaffold: `../tokex-clock/`.
 
 Version chronology (newest → oldest), neologisms, and DoP: [VERSION_LOG.md](VERSION_LOG.md).  
-Agent + cylinder docs (linked profiles): [Agent Registry](../../docs/agents/AGENT_REGISTRY.md) · [vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register.  
+Resgent + cylinder docs (linked profiles): [Agentic Registry](../../docs/agents/AGENTIC_REGISTRY.md) · [vTOPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register.  
 Root overview: [README.md](../../README.md) · GitHub: https://github.com/tknsh/tokenish

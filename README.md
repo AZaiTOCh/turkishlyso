@@ -16,8 +16,8 @@ Open-source **token use optimizer**. Every prompt and attachment runs through a 
 |-------|------------|
 | **Runtime** | Local daemon (`127.0.0.1:8741`) + static chat UI |
 | **Language** | Python 3.10+ |
-| **OptComp** | Tokopt cylinders — see [vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register |
-| **Agentics** | **[Resgents](docs/agents/RESGENTS.md)** (Resident): Argus · Mumblz · Rainman · Agatha · Mrs. Brown · Neoborg · Gretta · ZamanZamin — [Agent Registry](docs/agents/AGENT_REGISTRY.md) |
+| **OptComp** | Tokopt cylinders — see [vTOPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register |
+| **Agentics** | **[Resgents](docs/agents/RESGENTS.md)** (Resident): Argus · Mumblz · Rainman · Agatha · Mrs. Brown · Neoborg · Gretta · ZamanZamin — [Agentic Registry](docs/agents/AGENTIC_REGISTRY.md) |
 | **Middleware** | **[Nemean](docs/middleware/NEMEAN.md)** Privacy Middleware (TOKISH) |
 | **Providers** | Gemini 3.5 Flash, OpenRouter, OpenAI, Anthropic, Groq, Grok, Perplexity (user keys) |
 | **Hive** | Live World Counter — engine-local + optional Cloudflare Worker (`packages/tokex-clock/`) |
@@ -73,13 +73,13 @@ prompt + doc → Hi0 / dedupe / format_csv / headroom / ITS (conditional)
             → Argus-aware provider dispatch
 ```
 
-**Agents:**  
+**Resgents:**  
 **1) [Argus](docs/agents/ARGUS.md)** · **2) [Mumblz](docs/agents/MUMBLZ.md)** · **3) [Rainman](docs/agents/RAINMAN.md)** · **4) [Agatha](docs/agents/AGATHA.md)** · **5) [Mrs. Brown](docs/agents/MRS_BROWN.md)** · **6) [Neoborg](docs/agents/NEOBORG.md)** · **7) [Gretta](docs/agents/GRETTA.md)** · **8) [ZamanZamin](docs/agents/ZAMANZAMIN.md)**
 
-**Cylinders ([vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md)):**  
+**Cylinders ([vTOPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md)):**  
 **1) [ingest](docs/cylinders/INGEST.md)** · **2) [LCS](docs/cylinders/LCS.md)** · **3) [split-exec](docs/cylinders/SPLIT_EXEC.md)** · **4) [Hi0](docs/cylinders/HI0.md)** · **5) [dedupe](docs/cylinders/DEDUPE.md)** · **6) [format_csv](docs/cylinders/FORMAT_CSV.md)** · **7) [headroom](docs/cylinders/HEADROOM.md)** · **8) [ITS](docs/cylinders/ITS.md)** · **9) [FAISS/MIB](docs/cylinders/FAISS_MIB.md)** · **10) [pxpipe](docs/cylinders/PXPIPE.md)** · **11) [tokenizer gate](docs/cylinders/TOKENIZER_GATE.md)** · **12) [vision](docs/cylinders/VISION.md)** · **13) [passthrough](docs/cylinders/PASSTHROUGH.md)** · **14) [ffmpeg/Clop](docs/cylinders/FFMPEG.md)** · **15) [Memtrove](docs/cylinders/MEMTROVE.md)**
 
-Canonical directories: [Agent Registry](docs/agents/AGENT_REGISTRY.md) · [vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register
+Canonical directories: [Agentic Registry](docs/agents/AGENTIC_REGISTRY.md) · [vTOPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register
 
 ---
 
@@ -119,13 +119,13 @@ Listed **newest → oldest**. Changes use **`1)`, `2)`, `3)`** format. Detail + 
 **3)** Upload images/videos chips; taxonomy docs for resgents + Nemean  
 **4)** Free tokenish = OptComp; TOKISH = tokenish + Nemean Privacy Middleware  
 
-### v0.4.5 — Gretta fidelity gate · Auto lock · [vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) · reply stamps
+### v0.4.5 — Gretta fidelity gate · Auto lock · [vTOPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) · reply stamps
 **Commit timestamp:** 2026-07-22 07:17:39 -04:00
 
 **1) Reply stamp** — LLM · datetime · TOKEX on every reply  
 **2) Auto locks Models** — Gemini-first; Claude / updated GPT (not gpt-4o) may jump  
 **3) Gretta suitability gate** — brief reject or clear + est TOKEX; chatbox fidelity warning  
-**4) [vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register** — brands + virtual-core columns + glossary links  
+**4) [vTOPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register** — brands + virtual-core columns + glossary links  
 **5) Logo enlarge · italic tagline (no Tag: prefix)  
 
 ### v0.4.4 — Clop+ffmpeg media OptComp ON
@@ -211,8 +211,8 @@ Listed **newest → oldest**. Changes use **`1)`, `2)`, `3)`** format. Detail + 
 
 | Doc | Path |
 |-----|------|
-| [Agent Registry](docs/agents/AGENT_REGISTRY.md) | Canonical agent profiles |
-| [vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register | OptComp / [vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) cylinder (virtual core) profiles |
+| [Agentic Registry](docs/agents/AGENTIC_REGISTRY.md) | Canonical resgent profiles |
+| [vTOPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register | OptComp / [vTOPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) cylinder (virtual core) profiles |
 | [VERSION_LOG](packages/engine/VERSION_LOG.md) | Full version evolution + DoP |
 | [Engine README](packages/engine/README.md) | FastAPI endpoints |
 | [Download / Windows exe](docs/download.md) | Packaging notes |

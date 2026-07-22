@@ -57,6 +57,7 @@ const GRETTA_SEEN_KEY = "tokenish.gretta.seen.v3";
 const GRETTA_PICK_KEY = "tokenish.gretta.pick.v1";
 const GRETTA_FLOW = "tokenish.gretta.flow.v3"; // session step: intro|auth|api|keys|need|done
 const SIDEBAR_KEY = "tokenish.sidebars.v1";
+const SESSION_BOOT_KEY = "tokenish.session.boot.v1";
 
 
 let files = [];
@@ -1004,9 +1005,28 @@ function renderThreadList() {
 function renderMessages(thread) {
   messagesEl.innerHTML = "";
   for (const m of thread.messages || []) {
+    if (m.content === WELCOME) continue; // PDF empty-state uses centered hero, not this bubble
     addBubble(m.role, m.content, m.attachments);
   }
   renderTokexPanel(thread);
+  syncChatEmptyState(thread);
+}
+
+function isChatEmpty(thread) {
+  const msgs = (thread && thread.messages) || [];
+  if (!msgs.length) return true;
+  return msgs.every((m) => m.content === WELCOME);
+}
+
+function syncChatEmptyState(thread) {
+  const empty = isChatEmpty(thread);
+  const shell = document.getElementById("appShell");
+  const hero = document.getElementById("welcomeHero");
+  const chips = document.getElementById("uploadChips");
+  shell?.classList.toggle("chat-empty", empty);
+  if (hero) hero.hidden = !empty;
+  if (messagesEl) messagesEl.hidden = empty;
+  if (chips) chips.hidden = !empty;
 }
 
 function selectThread(id) {
@@ -1479,11 +1499,12 @@ function setSidebarOpen(side, open) {
 function initSidebars() {
   const prefs = readSidebarPrefs();
   const narrow = isNarrowChrome();
-  // Desktop defaults open; narrow defaults closed (drawer pattern).
+  // PDF: left open like ChatGPT; models drawer closed until needed.
   const left = typeof prefs.left === "boolean" ? prefs.left : !narrow;
-  const right = typeof prefs.right === "boolean" ? prefs.right : !narrow;
+  const right = typeof prefs.right === "boolean" ? prefs.right : false;
   setSidebarOpen("left", left);
   setSidebarOpen("right", right);
+  setHistoryOpen(true);
 }
 document.getElementById("toggleLeftSidebar")?.addEventListener("click", () => {
   const shell = document.getElementById("appShell");
@@ -1511,11 +1532,45 @@ document.getElementById("engineToggle")?.addEventListener("click", () => {
   menu.hidden = !open;
   menu.classList.toggle("open", open);
 });
+document.getElementById("cylindersToggle")?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const btn = document.getElementById("cylindersToggle");
+  const menu = document.getElementById("cylindersMenu");
+  if (!btn || !menu) return;
+  const open = btn.getAttribute("aria-expanded") !== "true";
+  btn.setAttribute("aria-expanded", open ? "true" : "false");
+  menu.hidden = !open;
+  menu.classList.toggle("open", open);
+});
+document.querySelectorAll(".engine-sublink[data-cylinder]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    /* Name list only for now — detail panels in a future session. */
+  });
+});
 document.getElementById("openResgents")?.addEventListener("click", () => {
-  showInfo("Resgents = native agents from the mother codebase (not plugged in). Reserve Agents spawn on demand; Resident Agents are programmed in. Leaner/tighter than external agents — LPU vs GPU.");
+  /* Label only — details via ⋮ */
 });
 document.getElementById("openMiddleware")?.addEventListener("click", () => {
-  showInfo("Nemean = Privacy Middleware (TOKISH): sits between the core engine and apps/data to enforce privacy, masking, or encryption. Local default + Azure-direct optional — zero prompt proxy. Free tokenish stays OptComp-only.");
+  /* Label only — details via ⋮ */
+});
+document.querySelectorAll(".engine-help-btn").forEach((btn) => {
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const key = btn.getAttribute("data-help");
+    const menu = document.getElementById(`help-${key}`);
+    const wasOpen = menu?.classList.contains("open");
+    document.querySelectorAll(".engine-help-menu.open").forEach((el) => el.classList.remove("open"));
+    closeAllTokexDetailMenus();
+    closeAllThreadMenus();
+    document.querySelectorAll(".slot-help-menu.open").forEach((el) => el.classList.remove("open"));
+    if (menu && !wasOpen) menu.classList.add("open");
+  });
+});
+document.querySelectorAll(".engine-help-menu").forEach((menu) => {
+  menu.addEventListener("click", (e) => e.stopPropagation());
+});
+document.getElementById("upgradeTokish")?.addEventListener("click", () => {
+  showInfo("TOKISH = free tokenish + Nemean Privacy Middleware (local default · Azure-direct optional · zero prompt proxy). License chooser lands next.");
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
@@ -1546,6 +1601,7 @@ document.querySelectorAll(".tokex-details-menu").forEach((menu) => {
 document.addEventListener("click", () => {
   closeAllThreadMenus();
   closeAllTokexDetailMenus();
+  document.querySelectorAll(".engine-help-menu.open").forEach((el) => el.classList.remove("open"));
 });
 promptEl.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
@@ -2103,6 +2159,7 @@ document.querySelectorAll(".slot-help-btn").forEach((btn) => {
 });
 document.addEventListener("click", () => {
   document.querySelectorAll(".slot-help-menu.open").forEach((el) => el.classList.remove("open"));
+  document.querySelectorAll(".engine-help-menu.open").forEach((el) => el.classList.remove("open"));
 });
 
 (function init() {
@@ -2113,18 +2170,38 @@ document.addEventListener("click", () => {
       tokex: normalizeTokex(t.tokex),
       messages: t.messages || [{ role: "assistant", content: WELCOME }],
     }));
-    activeId = stored.activeId && threads.some((t) => t.id === stored.activeId)
-      ? stored.activeId
-      : threads[0].id;
     lifetime = stored.lifetime
       ? normalizeTokex(stored.lifetime)
       : rebuildLifetimeFromThreads();
   } else {
-    const th = newThread();
-    threads = [th];
-    activeId = th.id;
+    threads = [];
     lifetime = emptyTokex();
   }
+  // Hard start (new browser session): land on a fresh chat, keep history.
+  // Same-tab refresh keeps the current active chat.
+  let resumeId = stored?.activeId && threads.some((t) => t.id === stored.activeId)
+    ? stored.activeId
+    : (threads[0]?.id || null);
+  try {
+    if (!sessionStorage.getItem(SESSION_BOOT_KEY)) {
+      sessionStorage.setItem(SESSION_BOOT_KEY, "1");
+      const th = newThread();
+      threads.unshift(th);
+      resumeId = th.id;
+    } else if (!resumeId) {
+      const th = newThread();
+      threads = [th];
+      resumeId = th.id;
+    }
+  } catch (_) {
+    if (!resumeId) {
+      const th = newThread();
+      threads.unshift(th);
+      resumeId = th.id;
+    }
+  }
+  activeId = resumeId;
+  saveStore();
   renderThreadList();
   selectThread(activeId);
   fillModels(DEFAULT_MODELS);
