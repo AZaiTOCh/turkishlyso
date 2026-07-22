@@ -102,8 +102,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   gap: 8px;
 }
 .brand-logo {
-  width: 51.27px;
-  height: 51.27px;
+  width: 56.4px;
+  height: 56.4px;
   border-radius: 50%;
   object-fit: cover;
   flex-shrink: 0;
@@ -138,11 +138,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
   color: #3f3f46;
   white-space: nowrap;
   display: block;
-}
-.brand-tagline .tag-prefix {
-  font-style: italic;
-  text-transform: none;
-  margin-right: 0.25em;
 }
 .brand-sub {
   display: block;

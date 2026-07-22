@@ -11,6 +11,6 @@ Canonical profiles for agentics. Append role history in each profile; do not inv
 | 5 | [Mrs. Brown](MRS_BROWN.md) | Numeric TOKEX intake gate | v0.3 |
 | 6 | [Neoborg](NEOBORG.md) | Cross-vet + Live World Counter broadcast | v0.3 |
 | 7 | [Gretta](GRETTA.md) | Onboarding + curated LLM router | v0.4.1 |
-| 8 | [tokex_clock](TOKEX_CLOCK.md) | Live World Counter client module | v0.3.1 |
+| 8 | [ZamanZamin](ZAMANZAMIN.md) | Live World Counter client module | v0.3.1 |
 
 Code: `packages/engine/tokenish_engine/agents/`

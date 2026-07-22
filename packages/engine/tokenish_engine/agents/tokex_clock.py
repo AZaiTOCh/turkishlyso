@@ -1,5 +1,7 @@
 """
-Live World Counter Clock — Neoborg hive client + local clock surface.
+ZamanZamin — Live World Counter Clock (legacy module id: tokex_clock).
+
+Neoborg hive client + local clock surface.
 
 Architecture (v1 = option B):
   Local tokenish engines POST vetted TOKEX savings to a tiny always-on hive API

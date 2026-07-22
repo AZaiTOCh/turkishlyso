@@ -13,8 +13,8 @@ Optional form flags on `/chat` and `/compile`: `enable_its`, `enable_ffmpeg` (bo
 
 **ffmpeg:** install a build from [ffmpeg.org/download](https://www.ffmpeg.org/download.html) (Windows: gyan.dev or BtbN). Set `TOKENISH_FFMPEG` to the `ffmpeg.exe` path or put it on `PATH`.
 
-Agents live under `tokenish_engine/agents/` (Mumblz, Rainman, Agatha, Mrs. Brown, Neoborg, Gretta, tokex_clock). Media cylinder: `tokenish_engine/media/`. Hive store: `hive_store.py`. Worldwide Worker scaffold: `../tokex-clock/`.
+Agents live under `tokenish_engine/agents/` (Mumblz, Rainman, Agatha, Mrs. Brown, Neoborg, Gretta, ZamanZamin / tokex_clock). Media cylinder: `tokenish_engine/media/`. Hive store: `hive_store.py`. Worldwide Worker scaffold: `../tokex-clock/`.
 
 Version chronology (newest → oldest), neologisms, and DoP: [VERSION_LOG.md](VERSION_LOG.md).  
-Agent + cylinder docs (linked profiles): [Agent Registry](../../docs/agents/AGENT_REGISTRY.md) · [vToPU Register](../../docs/cylinders/CYLINDER_REGISTER.md).  
+Agent + cylinder docs (linked profiles): [Agent Registry](../../docs/agents/AGENT_REGISTRY.md) · [vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register.  
 Root overview: [README.md](../../README.md) · GitHub: https://github.com/tknsh/tokenish

@@ -7,11 +7,11 @@ Factual release ledger. **Measured** = real TOKEX/Agatha numbers. **Unknown** = 
 
 Listed **newest → oldest**. Changes inside each version use the concise **`1)`, `2)`, `3)`** format for instant review. Commit dates are first release commits on `main` (or DoP day when pre-tag).
 
-**Agents:** [Agent Registry](../../docs/agents/AGENT_REGISTRY.md) · **Cylinders:** [vToPU Register](../../docs/cylinders/CYLINDER_REGISTER.md)
+**Agents:** [Agent Registry](../../docs/agents/AGENT_REGISTRY.md) · **Cylinders:** [vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register
 
 ---
 
-### v0.4.5 — Gretta fidelity gate · Auto lock · vToPU · reply stamps
+### v0.4.5 — Gretta fidelity gate · Auto lock · [vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) · reply stamps
 **Commit timestamp:** 2026-07-22 07:17:39 -04:00 (US Eastern)  
 **DoP:** 2026-07-22
 
@@ -32,14 +32,16 @@ Product UX + registry rename after peer-review charter work. Fidelity-first: uns
 - Chatbox grey placeholder warns off legal/scientific/contracts/mission-critical  
 - Hover tip on **fidelity loss**; send blocked when gate fails
 
-**4) vToPU Register** (was Cylinder Register)  
+**4) [vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register** (was Cylinder Register)  
 - Glossary links: Virtual · Token Optimization · Processing Unit · virtual cores  
-- Columns: `#` · Cylinders (virtual cores) · Type (italic brands) · Status · Since  
+- Columns: `#` · Cylinders (virtual cores = brand) · Type (technical profile) · Status · Since  
 - Brands: Ingestly, Luxy, Volpe, Highzero, Slimz, Forciv, Max, Chunkdrop, Chump, Pixish, Tokegater, Previsioner, Passopter, Fidelvid, Memtrove ([Moorcheh](https://github.com/moorcheh-ai))  
 - Parked notes: MicrOpt/UltraOpt; OKF (catalog ≠ TOKEX compressor)
 
 **5) UI polish**  
-- Logo +12%; *Tag: evry drp cnts*; cache bust `?v=0.4.5`
+- Logo enlarged; tagline *evry drp cnts* (no `Tag:` prefix); cache bust `?v=0.4.5`
+
+**Post-ship doc fix (same version, 2026-07-22 07:32:54 -04:00):** column swap for [vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md); `tokex_clock` branded **ZamanZamin**; every `vToPU` mention links the register; logo +10% again.
 
 **Out of scope this cut:** dedicated Qwen/Kimi/Gemma popup slots (use OpenRouter umbrella); AZ Signal Engine daemon wrap (AZ already has Hi0+TOKEX; verdict rarely)
 
@@ -141,11 +143,11 @@ Implements peer-pack P0/P1: sequential Rainman deltas, dual envelope gate fallba
 **Commit date:** 2026-07-14  
 **DoP:** ~8:03 AM – ~8:46 AM EST
 
-**1) Live World Counter** ([tokex_clock](../../docs/agents/TOKEX_CLOCK.md) · [Neoborg](../../docs/agents/NEOBORG.md))  
+**1) Live World Counter** ([ZamanZamin](../../docs/agents/ZAMANZAMIN.md) · [Neoborg](../../docs/agents/NEOBORG.md))  
 - Global panel, absolute per-node hive sync, users-online, CF Worker scaffold
 
 **2) Brand**  
-- Logo + tagline *Tag: evry drp cnts*; Grok (xAI) slot; API-link greying inventory
+- Logo · tagline *evry drp cnts*; Grok (xAI) slot; API-link greying inventory
 
 ---
 
@@ -154,7 +156,7 @@ Implements peer-pack P0/P1: sequential Rainman deltas, dual envelope gate fallba
 **DoP:** ~8:03 AM EST onward
 
 **1) Hive modules**  
-- `tokex_clock.py` + `hive_store.py` + `packages/tokex-clock/` Worker scaffold
+- `tokex_clock.py` (**ZamanZamin**) + `hive_store.py` + `packages/tokex-clock/` Worker scaffold
 
 **2) UI**  
 - Three TOKEX panels — lifetime / this chat / global
@@ -175,7 +177,7 @@ Implements peer-pack P0/P1: sequential Rainman deltas, dual envelope gate fallba
 - Claude / ChatGPT / Perplexity / Groq when pasted
 
 **4) Cylinder concert**  
-- See [vToPU Register](../../docs/cylinders/CYLINDER_REGISTER.md)
+- See [vToPU](https://github.com/AZaiTOCh/turkishlyso/blob/main/docs/cylinders/CYLINDER_REGISTER.md) Register
 
 ---
 
