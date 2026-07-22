@@ -155,7 +155,7 @@ def extract_docx(data: bytes) -> IngestResult:
 
 
 def optimize_image(data: bytes, prompt: str) -> IngestResult:
-    from PIL import Image
+    from tokenish_engine.media.clop_opt import optimize_still_bytes
 
     if OCR_INTENT.search(prompt or ""):
         text, mode = _ocr_image_bytes(data)
@@ -164,21 +164,19 @@ def optimize_image(data: bytes, prompt: str) -> IngestResult:
                 raw_text=text, data_type="image_ocr_text", metadata={"mode": mode}
             )
 
-    img = Image.open(io.BytesIO(data))
-    max_dim = settings.vision_max_dimension
-    if max(img.size) > max_dim:
-        img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
-    out = io.BytesIO()
-    rgb = img.convert("RGB")
-    rgb.save(out, format="JPEG", quality=settings.jpeg_quality, optimize=True)
-    b64 = base64.b64encode(out.getvalue()).decode("ascii")
+    still = optimize_still_bytes(data, "image.jpg")
+    b64 = still["b64"]
+    mime = still["mime"]
+    meta = {"mode": "clop_visual", **(still.get("meta") or {})}
+    if still.get("stage"):
+        meta["clop_stage"] = still["stage"]
     return IngestResult(
         raw_text="[IMAGE INPUT DETECTED: BOUND VIA MULTIMODAL OVERLAY]",
         data_type="optimized_image_pixels",
         image_b64=b64,
-        image_mime="image/jpeg",
-        images=[{"b64": b64, "mime": "image/jpeg"}],
-        metadata={"mode": "visual", "size": list(rgb.size)},
+        image_mime=mime,
+        images=[{"b64": b64, "mime": mime}],
+        metadata=meta,
     )
 
 
@@ -207,7 +205,7 @@ def ingest_file(
             data_type="doc_legacy",
             metadata={"warning": "legacy .doc best-effort decode; prefer .docx"},
         )
-    # Temporal media: optional ffmpeg keyframe sample (consent-gated), else still path.
+    # Temporal media: Clop+ffmpeg keyframe sample (ON by default when enable_ffmpeg).
     if ext in {
         "gif",
         "mp4",
@@ -219,20 +217,20 @@ def ingest_file(
         "mpeg",
         "mpg",
     }:
-        from tokenish_engine.media.ffmpeg_cylinder import sample_media_frames
+        from tokenish_engine.media.clop_opt import sample_temporal_for_vision
 
-        sampled = sample_media_frames(filename, data, enabled=enable_ffmpeg)
+        sampled = sample_temporal_for_vision(filename, data, enabled=enable_ffmpeg)
         if sampled.get("applied") and sampled.get("images"):
             images = list(sampled["images"])
             meta = {
-                "mode": "ffmpeg_keyframes",
+                "mode": "clop_ffmpeg_keyframes",
                 **(sampled.get("meta") or {}),
             }
             if sampled.get("stage"):
                 meta["ffmpeg_stage"] = sampled["stage"]
             return IngestResult(
                 raw_text=(
-                    f"[MEDIA INPUT: {len(images)} keyframe(s) sampled via ffmpeg "
+                    f"[MEDIA INPUT: {len(images)} keyframe(s) via Clop+ffmpeg "
                     f"from {ext}; annotate/transcribe from frames]"
                 ),
                 data_type="ffmpeg_media_frames",
@@ -241,7 +239,7 @@ def ingest_file(
                 images=images,
                 metadata=meta,
             )
-        # Fall through to Pillow still (first frame) when disabled/unavailable.
+        # Fall through to Clop still (first frame) when disabled/unavailable.
         still = optimize_image(data, prompt)
         meta = dict(still.metadata or {})
         if sampled.get("stage"):
@@ -249,7 +247,7 @@ def ingest_file(
         if sampled.get("warning"):
             meta["warning"] = sampled["warning"]
         return still.model_copy(update={"metadata": meta, "data_type": still.data_type or "optimized_image_pixels"})
-    if ext in {"png", "jpg", "jpeg", "webp", "bmp"}:
+    if ext in {"png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"}:
         return optimize_image(data, prompt)
     if ext in {
         "txt", "md", "csv", "json", "tsv", "log", "py", "ts", "js", "toml", "yaml", "yml",

@@ -149,10 +149,12 @@ def optimize(
     original_doc = ingested.raw_text or ""
     attachment_warning = (ingested.metadata or {}).get("warning")
 
-    ffmpeg_stage = (ingested.metadata or {}).get("ffmpeg_stage")
+    ffmpeg_stage = (ingested.metadata or {}).get("ffmpeg_stage") or (
+        ingested.metadata or {}
+    ).get("clop_stage")
     if ffmpeg_stage:
         stages.append(str(ffmpeg_stage))
-    if (ingested.metadata or {}).get("mode") == "ffmpeg_keyframes":
+    if (ingested.metadata or {}).get("mode") in {"ffmpeg_keyframes", "clop_ffmpeg_keyframes", "clop_visual"}:
         # Approximate vision-tile pressure reduced vs dumping many raw frames.
         frames = len(images)
         stage_deltas.append(
@@ -243,8 +245,6 @@ def optimize(
         stages.append("its_disabled_consent")
 
     fidelity_mode = "loyalty" if not use_its else "savings_consent"
-    if use_ffmpeg:
-        fidelity_mode = "savings_consent" if fidelity_mode == "loyalty" else fidelity_mode
 
     px_applied = False
     px_surcharge = 0

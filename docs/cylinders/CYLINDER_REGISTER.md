@@ -2,10 +2,8 @@
 
 **Tokopt** = Token Optimization. A **tokopt cylinder** is one working stage inside **OptComp**.
 
-Canonical profiles below. Defaults reflect fidelity-first era (v0.3+).
-
-| Cylinder | Doc | Default | Incepted |
-|----------|-----|---------|----------|
+| Cylinder | Default | Incepted |
+|----------|---------|----------|
 | [ingest](INGEST.md) | ON w/ files | v0.1 |
 | [LCS](LCS.md) | ON | v0.1 |
 | [split-exec / envelope](SPLIT_EXEC.md) | ON w/ material | v0.1 |
@@ -19,7 +17,7 @@ Canonical profiles below. Defaults reflect fidelity-first era (v0.3+).
 | [tokenizer gate](TOKENIZER_GATE.md) | ON | v0.2 |
 | [vision (Pillow)](VISION.md) | ON w/ images | v0.1 |
 | [passthrough](PASSTHROUGH.md) | ON when triggered | v0.1 |
-| [ffmpeg](FFMPEG.md) | OFF (consent) | wired v0.4.3 |
+| [ffmpeg / Clop media](FFMPEG.md) | **ON** (disable with `enable_ffmpeg=false`) | v0.4.3 · ON v0.4.4 |
 | [Memtrove](MEMTROVE.md) | not in optimize path | probe v0.2 |
 
-**Rejected / parked proposals:** [Alcubierre](REJECTED_ALCUBIERRE.md) · [Latents](PARKED_LATENTS.md)
+**Rejected / parked:** [Alcubierre](REJECTED_ALCUBIERRE.md) · [Latents](PARKED_LATENTS.md)

@@ -1,10 +1,23 @@
-# ffmpeg (media)
+# ffmpeg / Clop media cylinder
 
-Consent-gated GIF/video keyframe sampling via local **ffmpeg** binary (Clop-inspired toolchain pattern — not Clop.app). Default **OFF**.
+**Status:** **ON by default** (v0.4.4) — Clop-inspired still + ffmpeg temporal sampling for vision.
 
-Resolve binary: `TOKENISH_FFMPEG` / `ffmpeg_path` / PATH. Windows builds: [ffmpeg.org/download](https://www.ffmpeg.org/download.html) (gyan.dev or BtbN).
+## Behaviour (ported from Clop semantics)
 
-**Code:** `packages/engine/tokenish_engine/media/ffmpeg_cylinder.py`  
-**Form flag:** `enable_ffmpeg` on `/chat` and `/compile`
+Clop (macOS, GPLv3) uses pngquant / jpegoptim / gifsicle / ffmpeg / libvips. tokenish reimplements the **relevant OptComp behaviour** in Python:
 
-**Wired:** v0.4.3
+| Path | What runs |
+|------|-----------|
+| **Still images** | Downscale (never upscale) → JPEG quality ladder → keep only if smaller; optional `pngquant` / `jpegoptim` if on PATH |
+| **GIF** | Optional `gifsicle -O3` then ffmpeg frame sample |
+| **Video** | ffmpeg `fps` + `scale=min(max,iw)` → JPEG keyframes → Clop still each frame |
+
+**Code:** `packages/engine/tokenish_engine/media/clop_opt.py`  
+**Form flag:** `enable_ffmpeg` (default **true**; set `false` to disable)
+
+## Binaries
+
+- **Required for video/GIF multi-frame:** `ffmpeg` — [download](https://www.ffmpeg.org/download.html) (Windows: gyan.dev / BtbN). Set `TOKENISH_FFMPEG` or PATH.
+- **Optional (Clop tools):** `pngquant`, `jpegoptim`, `gifsicle` — used when found.
+
+Without ffmpeg, temporal files fall back to Clop still on the first frame.

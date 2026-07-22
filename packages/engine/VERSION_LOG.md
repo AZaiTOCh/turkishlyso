@@ -11,6 +11,27 @@ Listed **newest → oldest**. Changes inside each version use the concise **`1)`
 
 ---
 
+### v0.4.4 — Clop+ffmpeg media OptComp ON
+**Commit date:** 2026-07-21
+
+Ports Clop image/video optimize semantics into a working media cylinder and turns it **ON by default**.
+
+**1) Clop still path** (`tokenish_engine/media/clop_opt.py`)  
+- Downscale never-upscale · JPEG ladder · keep if smaller  
+- Optional `pngquant` / `jpegoptim` when on PATH  
+
+**2) Clop+ffmpeg temporal path** ([FFMPEG](../../docs/cylinders/FFMPEG.md))  
+- GIF: optional gifsicle then ffmpeg keyframes  
+- Video: ffmpeg fps+scale sample → JPEG → Clop still each frame  
+- Default **ON** (`enable_ffmpeg=true`); disable with `false`  
+
+**3) Ingest wiring**  
+- All still attaches use Clop still; GIF/video use temporal sampler  
+
+**Tests:** `tests/test_peer_review_upgrades.py` (`test_clop_still_shrinks_or_keeps`)
+
+---
+
 ### v0.4.3 — Peer-review upgrades + ffmpeg cylinder (pending first commit on new remote)
 **Commit date:** 2026-07-21
 

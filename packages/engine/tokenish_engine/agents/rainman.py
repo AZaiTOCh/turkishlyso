@@ -25,7 +25,7 @@ _CYLINDER_RULES: list[tuple[str, tuple[str, ...]]] = [
     ("headroom", ("headroom", "headroom_local")),
     ("its", ("its_drop_", "its_kiosk_block", "faiss_mib")),
     ("its_skipped_fidelity", ("its_skipped_assess", "its_disabled_consent")),
-    ("ffmpeg", ("ffmpeg_keyframes_", "ffmpeg_disabled_consent", "ffmpeg_skipped_no_binary", "ffmpeg_failed", "ffmpeg_no_frames")),
+    ("ffmpeg", ("ffmpeg_keyframes_", "ffmpeg_disabled_consent", "ffmpeg_skipped_no_binary", "ffmpeg_failed", "ffmpeg_no_frames", "clop_ffmpeg_", "clop_media_", "clop_still")),
     ("pxpipe", ("pxpipe", "pxpipe_dropped")),
     ("tokenizer_gate", ("tokenizer_gate", "shorthand_rejected", "verbatim_fallback", "envelope_gate_reject_", "envelope_fallback_")),
     ("vision", ("vision_images_",)),

@@ -52,11 +52,25 @@ def test_rainman_sequential_delta_attribution():
 
 
 def test_ffmpeg_disabled_by_default_marks_consent_stage():
-    # Minimal GIF89a header-ish bytes — cylinder should not apply when disabled.
     tiny = b"GIF89a" + b"\x00" * 32
     out = sample_media_frames("clip.gif", tiny, enabled=False)
     assert out["applied"] is False
-    assert out["stage"] == "ffmpeg_disabled_consent"
+    assert out["stage"] == "clop_media_disabled"
+
+
+def test_clop_still_shrinks_or_keeps():
+    from tokenish_engine.media.clop_opt import optimize_still_bytes
+    from PIL import Image
+    import io
+
+    img = Image.new("RGB", (1200, 800), color=(30, 90, 200))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    raw = buf.getvalue()
+    out = optimize_still_bytes(raw, "big.png")
+    assert out["b64"]
+    assert len(out["bytes"]) <= len(raw)
+    assert out["stage"].startswith("clop_still")
 
 
 def test_is_temporal_media():
@@ -69,7 +83,7 @@ def test_optimize_accepts_enable_ffmpeg_flag():
     result = optimize(
         prompt="what is in this clip?",
         files=[("note.txt", b"hello media placeholder")],
-        enable_ffmpeg=False,
+        enable_ffmpeg=True,
         enable_pxpipe=False,
         enable_its=False,
     )

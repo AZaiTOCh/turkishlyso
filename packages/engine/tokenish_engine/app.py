@@ -355,12 +355,13 @@ async def compile_endpoint(
     model: str | None = Form(None),
     page_range: str | None = Form(None),
     enable_its: str | None = Form("false"),
-    enable_ffmpeg: str | None = Form("false"),
+    enable_ffmpeg: str | None = Form("true"),
     files: list[UploadFile] | None = File(None),
 ) -> JSONResponse:
     uploads = await _read_uploads(files)
     its_flag = str(enable_its or "").strip().lower() in {"1", "true", "yes", "on"}
-    ffmpeg_flag = str(enable_ffmpeg or "").strip().lower() in {"1", "true", "yes", "on"}
+    ffmpeg_raw = str(enable_ffmpeg if enable_ffmpeg is not None else "true").strip().lower()
+    ffmpeg_flag = ffmpeg_raw not in {"0", "false", "no", "off"}
     result = optimize(
         prompt=prompt,
         target_engine=target_engine,
@@ -383,13 +384,15 @@ async def chat_endpoint(
     page_range: str | None = Form(None),
     stream: bool = Form(False),
     enable_its: str | None = Form("false"),
-    enable_ffmpeg: str | None = Form("false"),
+    enable_ffmpeg: str | None = Form("true"),
     files: list[UploadFile] | None = File(None),
 ):
     apply_saved_keys_to_environ()
     uploads = await _read_uploads(files)
     its_flag = str(enable_its or "").strip().lower() in {"1", "true", "yes", "on"}
-    ffmpeg_flag = str(enable_ffmpeg or "").strip().lower() in {"1", "true", "yes", "on"}
+    # Default ON: blank / missing → True; only explicit false disables.
+    ffmpeg_raw = str(enable_ffmpeg if enable_ffmpeg is not None else "true").strip().lower()
+    ffmpeg_flag = ffmpeg_raw not in {"0", "false", "no", "off"}
     compiled = optimize(
         prompt=prompt,
         target_engine=target_engine,

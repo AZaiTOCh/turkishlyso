@@ -1,6 +1,6 @@
 # tokenish
 
-**Version:** 0.4.3 · **Runtime:** local FastAPI daemon + chat UI · **GitHub:** [`tknsh/tokenish`](https://github.com/tknsh/tokenish)
+**Version:** 0.4.4 · **Runtime:** local FastAPI daemon + chat UI · **GitHub:** [`tknsh/tokenish`](https://github.com/tknsh/tokenish)
 
 Open-source **token use optimizer**. Every prompt and attachment runs through a **split-execution / tokopt (OptComp)** pipeline, then dispatches to the model you select.
 
@@ -103,6 +103,13 @@ Full chronology: [`packages/engine/VERSION_LOG.md`](packages/engine/VERSION_LOG.
 ## Version evolution
 
 Listed **newest → oldest**. Changes use **`1)`, `2)`, `3)`** format. Detail + DoP: [`VERSION_LOG.md`](packages/engine/VERSION_LOG.md).
+
+### v0.4.4 — Clop+ffmpeg media OptComp ON
+**Commit date:** 2026-07-21
+
+**1) Clop still optimize** (never-upscale · JPEG ladder · keep if smaller)  
+**2) ffmpeg temporal keyframes ON by default** ([FFMPEG](docs/cylinders/FFMPEG.md))  
+**3) Optional Clop CLIs:** pngquant / jpegoptim / gifsicle when on PATH  
 
 ### v0.4.3 — Peer-review upgrades + ffmpeg
 **Commit date:** 2026-07-21
