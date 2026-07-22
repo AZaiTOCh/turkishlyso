@@ -4,6 +4,8 @@
 
 Open-source **token use optimizer**. Every prompt and attachment runs through a **split-execution / tokopt (OptComp)** pipeline, then dispatches to the model you select.
 
+**tokenish** is Pareto Effcient in its universal causes vs effects vs functions vs outcomes (Jevon's Paradox nothwithstanding).
+
 **TOKISH** (paid surface, inducted v0.5.0) = free tokenish + **[Nemean](docs/middleware/NEMEAN.md) Privacy Middleware**. Free tokenish stays OptComp-only.
 
 *evry drp cnts*
