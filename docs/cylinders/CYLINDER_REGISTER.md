@@ -26,7 +26,7 @@ A **tokopt cylinder** is one working stage (virtual core) inside **OptComp** / *
 
 | # | Item | Status |
 |---|------|--------|
-| 1 | [Alcubierre](REJECTED_ALCUBIERRE.md) | rejected |
+| 1 | [Alcubierre drive](REJECTED_ALCUBIERRE.md) | rejected |
 | 2 | [Latents](PARKED_LATENTS.md) | parked |
 | 3 | MicrOpt / UltraOpt / AtoOpt (whitespace·font atomism) | assess only — see peer notes |
 | 4 | OKF (Google Open Knowledge Format) | park — knowledge catalog, not TOKEX compressor |
