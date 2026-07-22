@@ -135,10 +135,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
   font-weight: 400;
   font-style: italic;
   letter-spacing: 0.03em;
-  text-transform: lowercase;
   color: #3f3f46;
   white-space: nowrap;
   display: block;
+}
+.brand-tagline .tag-prefix {
+  font-style: italic;
+  text-transform: none;
+  margin-right: 0.25em;
 }
 .brand-sub {
   display: block;

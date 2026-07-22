@@ -111,7 +111,7 @@ Implements peer-pack P0/P1: sequential Rainman deltas, dual envelope gate fallba
 - Global panel, absolute per-node hive sync, users-online, CF Worker scaffold
 
 **2) Brand**  
-- Logo + tagline **evry drp cnts**; Grok (xAI) slot; API-link greying inventory
+- Logo + tagline *Tag: evry drp cnts*; Grok (xAI) slot; API-link greying inventory
 
 ---
 

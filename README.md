@@ -4,7 +4,7 @@
 
 Open-source **token use optimizer**. Every prompt and attachment runs through a **split-execution / tokopt (OptComp)** pipeline, then dispatches to the model you select.
 
-**evry drp cnts**
+*Tag: evry drp cnts*
 
 ---
 
@@ -15,7 +15,7 @@ Open-source **token use optimizer**. Every prompt and attachment runs through a 
 | **Runtime** | Local daemon (`127.0.0.1:8741`) + static chat UI |
 | **Language** | Python 3.10+ |
 | **OptComp** | Tokopt cylinders — see [Cylinder Register](docs/cylinders/CYLINDER_REGISTER.md) |
-| **Agentics** | Argus, Mumblz, Rainman, Agatha, Mrs. Brown, Neoborg, Gretta — [Agent Registry](docs/agents/AGENT_REGISTRY.md) |
+| **Agentics** | **1)** Argus · **2)** Mumblz · **3)** Rainman · **4)** Agatha · **5)** Mrs. Brown · **6)** Neoborg · **7)** Gretta · **8)** tokex_clock — [Agent Registry](docs/agents/AGENT_REGISTRY.md) |
 | **Providers** | Gemini 3.5 Flash, OpenRouter, OpenAI, Anthropic, Groq, Grok, Perplexity (user keys) |
 | **Hive** | Live World Counter — engine-local + optional Cloudflare Worker (`packages/tokex-clock/`) |
 | **Version control** | GitHub — [`tknsh/tokenish`](https://github.com/tknsh/tokenish) |
@@ -70,7 +70,11 @@ prompt + doc → Hi0 / dedupe / format_csv / headroom / ITS (conditional)
             → Argus-aware provider dispatch
 ```
 
-**Agents:** [Argus](docs/agents/ARGUS.md) · [Mumblz](docs/agents/MUMBLZ.md) · [Rainman](docs/agents/RAINMAN.md) · [Agatha](docs/agents/AGATHA.md) · [Mrs. Brown](docs/agents/MRS_BROWN.md) · [Neoborg](docs/agents/NEOBORG.md) · [Gretta](docs/agents/GRETTA.md) · [tokex_clock](docs/agents/TOKEX_CLOCK.md)
+**Agents:**  
+**1) [Argus](docs/agents/ARGUS.md)** · **2) [Mumblz](docs/agents/MUMBLZ.md)** · **3) [Rainman](docs/agents/RAINMAN.md)** · **4) [Agatha](docs/agents/AGATHA.md)** · **5) [Mrs. Brown](docs/agents/MRS_BROWN.md)** · **6) [Neoborg](docs/agents/NEOBORG.md)** · **7) [Gretta](docs/agents/GRETTA.md)** · **8) [tokex_clock](docs/agents/TOKEX_CLOCK.md)**
+
+**Cylinders:**  
+**1) [ingest](docs/cylinders/INGEST.md)** · **2) [LCS](docs/cylinders/LCS.md)** · **3) [split-exec](docs/cylinders/SPLIT_EXEC.md)** · **4) [Hi0](docs/cylinders/HI0.md)** · **5) [dedupe](docs/cylinders/DEDUPE.md)** · **6) [format_csv](docs/cylinders/FORMAT_CSV.md)** · **7) [headroom](docs/cylinders/HEADROOM.md)** · **8) [ITS](docs/cylinders/ITS.md)** · **9) [FAISS/MIB](docs/cylinders/FAISS_MIB.md)** · **10) [pxpipe](docs/cylinders/PXPIPE.md)** · **11) [tokenizer gate](docs/cylinders/TOKENIZER_GATE.md)** · **12) [vision](docs/cylinders/VISION.md)** · **13) [passthrough](docs/cylinders/PASSTHROUGH.md)** · **14) [ffmpeg/Clop](docs/cylinders/FFMPEG.md)** · **15) [Memtrove](docs/cylinders/MEMTROVE.md)**
 
 Canonical directories: [Agent Registry](docs/agents/AGENT_REGISTRY.md) · [Cylinder Register](docs/cylinders/CYLINDER_REGISTER.md)
 
