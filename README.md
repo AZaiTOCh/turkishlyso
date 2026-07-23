@@ -6,7 +6,7 @@
 
 **tokenish** is [Pareto Effcient](https://www.google.com/search?q=pareto+efficient&rlz=1C1CHBD_enCA1170CA1170&oq=pareto+efficient&gs_lcrp=EgZjaHJvbWUyBggAEEUYOTIHCAEQABiABDIHCAIQABiABDIHCAMQABiABDIHCAQQABiABDIHCAUQABiABDIHCAYQABiABDIHCAcQABiABDIHCAgQABiABDIHCAkQABiABNIBCDIzNjdqMGo3qAIAsAIA&sourceid=chrome&source=chrome.ob&ie=UTF-8) in its universal causes vs effects vs functions vs outcomes - [Jevons Paradox](https://www.google.com/search?q=Jevons+Paradox&rlz=1C1CHBD_enCA1170CA1170&oq=Jevons+Paradox&gs_lcrp=EgZjaHJvbWUqCAgAEEUYJxg7MggIABBFGCcYOzIMCAEQABhDGIAEGIoFMgcIAhAAGIAEMgcIAxAAGIAEMgwIBBAAGEMYgAQYigUyBwgFEAAYgAQyDAgGEAAYQxiABBiKBTIHCAcQABiABDIHCAgQABiABDIHCAkQABiABNIBCDUyOTRqMGo3qAIAsAIA&sourceid=chrome&source=chrome.ob&ie=UTF-8) nothwithstanding. 
 
-**tokenish** UI/interface is 'egoless' (minimalist/utilitarian motif respecting user's ease of navigation and mouse mileage)
+**tokenish** UI/interface is 'egoless' ([utilitarian](https://www.aesdes.org/2025/01/22/utilitarian-design-aesthetic/) motif respecting user's ease of navigation and mouse mileage)
 
 **tokenish** Enterprise subscribtion upgrade version is called **TOKISH** (paid surface, inducted in v0.5.0). **TOKISH** = freemium **tokenish** + **[Nemean](docs/middleware/NEMEAN.md) Privacy Middleware**. Free tokenish stays OptComp-only.
 
