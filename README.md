@@ -2,7 +2,7 @@
 
 **Version:** 0.5.0 · **Runtime:** local FastAPI daemon + chat UI · **GitHub:** [`tknsh/tokenish`](https://github.com/tknsh/tokenish)
 
-Open-source **token use optimizer**. Every prompt and attachment runs through a **split-execution / tokopt (OptComp)** pipeline, then dispatches to the model you select.
+**tokenish** is an Open-source **token use optimizer**. Every prompt and attachment runs through a staged **split-execution / tokopt (OptComp)** pipeline and virtual Processing Unit (vCPU), then dispatches to the model or the daisy-chaineded LLMs that users select.
 
 **tokenish** is [Pareto Effcient](https://www.google.com/search?q=pareto+efficient&rlz=1C1CHBD_enCA1170CA1170&oq=pareto+efficient&gs_lcrp=EgZjaHJvbWUyBggAEEUYOTIHCAEQABiABDIHCAIQABiABDIHCAMQABiABDIHCAQQABiABDIHCAUQABiABDIHCAYQABiABDIHCAcQABiABDIHCAgQABiABDIHCAkQABiABNIBCDIzNjdqMGo3qAIAsAIA&sourceid=chrome&source=chrome.ob&ie=UTF-8) in its universal causes vs effects vs functions vs outcomes - [Jevons Paradox](https://www.google.com/search?q=Jevons+Paradox&rlz=1C1CHBD_enCA1170CA1170&oq=Jevons+Paradox&gs_lcrp=EgZjaHJvbWUqCAgAEEUYJxg7MggIABBFGCcYOzIMCAEQABhDGIAEGIoFMgcIAhAAGIAEMgcIAxAAGIAEMgwIBBAAGEMYgAQYigUyBwgFEAAYgAQyDAgGEAAYQxiABBiKBTIHCAcQABiABDIHCAgQABiABDIHCAkQABiABNIBCDUyOTRqMGo3qAIAsAIA&sourceid=chrome&source=chrome.ob&ie=UTF-8) nothwithstanding. 
 
